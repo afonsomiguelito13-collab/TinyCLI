@@ -14,16 +14,9 @@ SERVER_URL = os.environ.get("TINY_SERVER_URL", "https://tinycli.onrender.com")
 TRUST_FILE = os.path.expanduser("~/.tinycli_trust")
 USAGE_FILE = os.path.expanduser("~/.local/share/.tinycli_usage.json")
 
-MODELOS_DISPONIVEIS = [
-    "deepseek-v4.1-flash", 
-    "deepseek-v4-flash",
-    "glm-5.3",
-    "glm-5.3-flash",
-    "gemini-3.8-flash",
-    "jev-1.13"
-]
+# --- SISTEMA DE USAGE (MÁGICA DO WEEKLY) ---
+LIMITE_SEMANAL = 1000 # Limite de tokens (podes mudar ou receber do servidor)
 
-# --- SISTEMA DE USAGE ---
 def carregar_usage():
     os.makedirs(os.path.dirname(USAGE_FILE), exist_ok=True)
     if os.path.exists(USAGE_FILE):
@@ -32,7 +25,7 @@ def carregar_usage():
                 return json.load(f)
         except:
             pass
-    return {"requests": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "modelo_atual": MODELOS_DISPONIVEIS[0]}
+    return {"requests": 0, "tokens_usados": 0, "tokens_restantes": LIMITE_SEMANAL}
 
 def salvar_usage(data):
     os.makedirs(os.path.dirname(USAGE_FILE), exist_ok=True)
@@ -41,7 +34,7 @@ def salvar_usage(data):
 
 USAGE_DATA = carregar_usage()
 
-# --- SISTEMA DE CONFIANÇA ---
+# --- SISTEMA DE CONFIANÇA (TRUST UI) ---
 def carregar_confiaveis():
     if os.path.exists(TRUST_FILE):
         with open(TRUST_FILE, "r") as f:
@@ -78,29 +71,27 @@ def pedir_permissao(caminho):
 # --- COMUNICAÇÃO COM A NUVEM ---
 def chamar_ia(mensagens):
     global USAGE_DATA
-    api_url = f"{SERVER_URL}/api/chat"
+    USAGE_DATA["requests"] += 1
     
-    # Envia o modelo atual (mesmo que o servidor force, é boa prática)
-    data = {"messages": mensagens, "model": USAGE_DATA["modelo_atual"]}
+    api_url = f"{SERVER_URL}/api/chat"
+    data = {"messages": mensagens}
     
     try:
         req = urllib.request.Request(api_url, data=json.dumps(data).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST")
         with urllib.request.urlopen(req) as response:
-            resultado = json.loads(response.read().decode("utf-8"))
+            dados = json.loads(response.read().decode("utf-8"))
             
-            # Atualiza os contadores de usage
-            usage_api = resultado.get("usage", {})
-            USAGE_DATA["requests"] += 1
-            USAGE_DATA["prompt_tokens"] += usage_api.get("prompt_tokens", 0)
-            USAGE_DATA["completion_tokens"] += usage_api.get("completion_tokens", 0)
-            USAGE_DATA["total_tokens"] += usage_api.get("total_tokens", 0)
+            # O servidor devolve os tokens usados
+            tokens_usados = dados.get("usage", {}).get("total_tokens", 0)
+            USAGE_DATA["tokens_usados"] += tokens_usados
+            USAGE_DATA["tokens_restantes"] = max(0, LIMITE_SEMANAL - USAGE_DATA["tokens_usados"])
             salvar_usage(USAGE_DATA)
             
-            return resultado["content"]
+            return dados["choices"][0]["message"]["content"]
     except urllib.error.HTTPError as e:
         return f"ERRO NO SERVIDOR ({e.code}): {e.reason}"
     except Exception as e:
-        return f"ERRO DE CONEXÃO: O servidor tá offline?"
+        return f"ERRO DE CONEXÃO: O servidor está offline?"
 
 # --- EXECUÇÃO DE FERRAMENTAS ---
 def executar_ferramenta(resposta):
@@ -151,41 +142,54 @@ def mostrar_help():
     table.add_column("Descrição", style="white")
     
     table.add_row("/help", "Mostra este menu de ajuda")
-    table.add_row("/models", "Troca o modelo de IA (UI interativa)")
-    table.add_row("/usage", "Mostra os teus tokens, pedidos e o modelo atual")
+    table.add_row("/models", "Mostra os modelos disponíveis e qual está ativo")
+    table.add_row("/usage", "Mostra a tua cota, tokens restantes e barra de progresso")
     table.add_row("/clear", "Limpa o terminal")
     table.add_row("sair", "Fecha o Tiny CLI")
     
     console.print(table)
-    console.print("\n[dim]* As permissões de diretório são guardadas em ~/.tinycli_trust[/dim]")
-    console.print("[dim]* O usage é guardado em ~/.local/share/.tinycli_usage.json[/dim]\n")
 
 def mostrar_usage():
+    # Calcula a percentagem
+    usados = USAGE_DATA.get("tokens_usados", 0)
+    limite = LIMITE_SEMANAL
+    restantes = max(0, limite - usados)
+    percentagem = (usados / limite) * 100
+    
+    # Cria a barra de progresso visual
+    blocos_cheios = int((usados / limite) * 20)
+    barra = "█" * blocos_cheios + "░" * (20 - blocos_cheios)
+    
+    # Cor da barra baseada no uso
+    cor = "green" if percentagem < 50 else "yellow" if percentagem < 80 else "red"
+    
     console.print(Panel(
-        f"[bold green]Modelo Atual:[/bold green] {USAGE_DATA['modelo_atual']}\n"
-        f"[bold yellow]Requests Feitos:[/bold yellow] {USAGE_DATA['requests']}\n"
-        f"[bold cyan]Tokens de Prompt:[/bold cyan] {USAGE_DATA['prompt_tokens']}\n"
-        f"[bold cyan]Tokens de Resposta:[/bold cyan] {USAGE_DATA['completion_tokens']}\n"
-        f"[bold magenta]Total de Tokens:[/bold magenta] {USAGE_DATA['total_tokens']}\n\n"
-        f"[dim]Servidor: {SERVER_URL}[/dim]",
-        title="📊 Estatísticas do Tiny Cloud", border_style="blue"
+        f"[bold green]Modelo Atual:[/bold green] deepseek-v4.1-flash (Servidor)\n"
+        f"[bold cyan]Servidor:[/bold cyan] {SERVER_URL}\n\n"
+        f"[bold]Uso Semanal (Tokens):[/bold] {usados} / {limite}\n"
+        f"[{cor}]{barra}[/{cor}] {percentagem:.1f}%\n\n"
+        f"[bold yellow]Restantes:[/bold yellow] {restantes} tokens\n"
+        f"[dim]Requests feitos: {USAGE_DATA.get('requests', 0)}[/dim]",
+        title="📊 Usage Tracker (Weekly)",
+        border_style="blue"
     ))
 
-def trocar_modelo():
-    escolha = questionary.select(
-        "Escolha o modelo (Use as setas ↑/↓ e Enter):",
-        choices=MODELOS_DISPONIVEIS,
-        style=custom_style,
-        default=USAGE_DATA["modelo_atual"]
-    ).ask()
-    if escolha:
-        USAGE_DATA["modelo_atual"] = escolha
-        salvar_usage(USAGE_DATA)
-        console.print(f"[green]✅ Modelo alterado para: {escolha}[/green]\n")
+def mostrar_models():
+    table = Table(title="🧠 Modelos Disponíveis (BeatAPI)", show_header=True, header_style="bold magenta")
+    table.add_column("Modelo", style="cyan")
+    table.add_column("Status", style="green")
+    
+    table.add_row("deepseek-v4.1-flash", "✅ Ativo (Forçado pelo Servidor)")
+    table.add_row("deepseek-v4-flash", "🔒 Bloqueado pelo Servidor")
+    table.add_row("glm-5.3", "🔒 Bloqueado pelo Servidor")
+    table.add_row("gemini-3.8-flash", "🔒 Bloqueado pelo Servidor")
+    
+    console.print(table)
+    console.print("[dim]* O servidor decide o modelo para garantir a cota grátis.[/dim]\n")
 
 # --- LOOP PRINCIPAL ---
 def main():
-    console.print(Panel("[bold green]🦁 Tiny Cloud CLI v3.1[/bold green]\nDigita [bold cyan]/help[/bold cyan] para ver os comandos.", border_style="green"))
+    console.print(Panel("[bold green]🦁 Tiny Cloud CLI v3.5[/bold green]\nDigita [bold cyan]/help[/bold cyan] para ver os comandos.", border_style="green"))
     
     if os.getcwd() not in DIRETORIOS_CONFIAVEIS:
         pedir_permissao(os.getcwd())
@@ -207,7 +211,7 @@ def main():
                 mostrar_help()
                 continue
             elif cmd == "/models":
-                trocar_modelo()
+                mostrar_models()
                 continue
             elif cmd == "/usage":
                 mostrar_usage()
