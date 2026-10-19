@@ -48,7 +48,7 @@ fi
 cat << EOF > "$BIN_DIR/tinycli"
 #!/bin/bash
 # ATENÇÃO: Substitui pela tua URL real do Render quando fizeres deploy!
-export TINY_SERVER_URL="https://tiny-cloud-cli.onrender.com"
+export TINY_SERVER_URL="https://tinycli.onrender.com"
 python3 "$CLIENT_DIR/tinycli.py"
 EOF
 
