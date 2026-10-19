@@ -29,7 +29,7 @@ MODELOS_DISPONIVEIS = [
     "jev-1.13"             # BeatAPI
 ]
 MODELO_ATUAL = MODELOS_DISPONIVEIS[0]
-LIMITE_SEMANAL = 1000
+LIMITE_SEMANAL = 50000
 
 def limpar_tela():
     os.system('clear' if os.name == 'posix' else 'cls')
@@ -179,14 +179,20 @@ def mostrar_help():
 def mostrar_usage():
     usados = USAGE_DATA.get("tokens_usados", 0)
     restantes = max(0, LIMITE_SEMANAL - usados)
-    percentagem = (usados / LIMITE_SEMANAL) * 100
-    blocos = int((usados / LIMITE_SEMANAL) * 20)
+    
+    percentagem_real = (usados / LIMITE_SEMANAL) * 100
+    percentagem_visual = min(100, percentagem_real) # Trava a barra nos 100%
+    
+    blocos = int((percentagem_visual / 100) * 20)
     barra = "█" * blocos + "░" * (20 - blocos)
-    cor = "green" if percentagem < 50 else "yellow" if percentagem < 80 else "red"
+    
+    # Cores dinâmicas (Verde, Amarelo, Vermelho)
+    cor = "green" if percentagem_real < 50 else "yellow" if percentagem_real < 80 else "red"
+    
     console.print(Panel(
         f"[bold green]Modelo Atual:[/bold green] {MODELO_ATUAL}\n"
         f"[bold]Tokens usados:[/bold] {usados} / {LIMITE_SEMANAL}\n"
-        f"[{cor}]{barra}[/{cor}] {percentagem:.1f}%\n"
+        f"[{cor}]{barra}[/{cor}] {percentagem_real:.1f}%\n"
         f"[bold yellow]Restantes:[/bold yellow] {restantes}\n"
         f"[dim]Requests: {USAGE_DATA.get('requests', 0)}[/dim]",
         title="📊 Usage", border_style="blue"
