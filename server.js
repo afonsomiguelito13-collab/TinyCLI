@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 
-// Confia no proxy do Render (essencial para pegar o IP real do cliente)
+// Configuração de Trust Proxy para o Render
 app.set('trust proxy', 1);
 
 app.use(cors());
@@ -11,12 +11,26 @@ app.use(express.json());
 const BEATAPI_KEY = process.env.BEATAPI_API_KEY;
 const BEATAPI_URL = "https://api.beatapi.io/v1/chat/completions";
 
+// Lista de modelos permitidos (Free)
+const MODELOS_PERMITIDOS = [
+    "deepseek-v4.1-flash",
+    "deepseek-v4-flash",
+    "glm-5.3",
+    "glm-5.3-flash",
+    "gemini-3.8-flash",
+    "jev-1.13"
+];
+
 app.post('/api/chat', async (req, res) => {
     if (!BEATAPI_KEY) return res.status(500).json({ error: "Server misconfigured." });
 
-    const { messages } = req.body;
-    // O servidor força o modelo para evitar que o cliente abuse
-    const forced_model = "deepseek-v4.1-flash"; 
+    const { messages, model } = req.body;
+    
+    // O Servidor decide: Se o modelo pedido for válido, usa. Se não, usa o padrão.
+    let modelo_final = "deepseek-v4.1-flash";
+    if (model && MODELOS_PERMITIDOS.includes(model)) {
+        modelo_final = model;
+    }
 
     try {
         const response = await fetch(BEATAPI_URL, {
@@ -26,7 +40,7 @@ app.post('/api/chat', async (req, res) => {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: forced_model,
+                model: modelo_final,
                 messages: messages,
                 temperature: 0.3
             })
@@ -36,11 +50,11 @@ app.post('/api/chat', async (req, res) => {
         
         if (!response.ok) return res.status(response.status).json(data);
         
-        // Devolve a resposta e os dados de USAGE (tokens) para o cliente
+        // Devolve a resposta e o modelo que foi REALMENTE usado
         res.json({
-            content: data.choices[0].message.content,
-            usage: data.usage, // A BeatAPI devolve prompt_tokens, completion_tokens e total_tokens
-            model: forced_model
+            choices: data.choices,
+            usage: data.usage,
+            modelo_usado: modelo_final
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
