@@ -22,12 +22,11 @@ USAGE_FILE = os.path.expanduser("~/.local/share/.tinycli_usage.json")
 SESSIONS_DIR = os.path.expanduser("~/.local/share/.tinycli_sessions")
 
 MODELOS_DISPONIVEIS = [
-    "deepseek-v4.1-flash",
-    "deepseek-v4-flash",
-    "glm-5.3",
-    "glm-5.3-flash",
-    "gemini-3.8-flash",
-    "jev-1.13"
+    "agnes-3.0-flash",     # VyceAI
+    "deepseek-v4-flash",   # VyceAI
+    "deepseek-v4.1",       # VyceAI
+    "gemini-3.8-flash",    # BeatAPI
+    "jev-1.13"             # BeatAPI
 ]
 MODELO_ATUAL = MODELOS_DISPONIVEIS[0]
 LIMITE_SEMANAL = 1000
@@ -51,12 +50,16 @@ def salvar_sessao(session_id, mensagens):
     with open(os.path.join(SESSIONS_DIR, f"{session_id}.json"), "w") as f:
         json.dump(mensagens, f)
 
-# --- USAGE E CONFIANÇA ---
+# --- USAGE BLINDADO ---
 def carregar_usage():
     os.makedirs(os.path.dirname(USAGE_FILE), exist_ok=True)
     if os.path.exists(USAGE_FILE):
         try:
-            with open(USAGE_FILE, "r") as f: return json.load(f)
+            with open(USAGE_FILE, "r") as f:
+                data = json.load(f)
+                data.setdefault("requests", 0)
+                data.setdefault("tokens_usados", 0)
+                return data
         except: pass
     return {"requests": 0, "tokens_usados": 0}
 
@@ -66,6 +69,7 @@ def salvar_usage(data):
 
 USAGE_DATA = carregar_usage()
 
+# --- CONFIANÇA ---
 def carregar_confiaveis():
     if os.path.exists(TRUST_FILE):
         with open(TRUST_FILE, "r") as f: return set(f.read().splitlines())
@@ -86,7 +90,7 @@ def pedir_permissao(caminho):
 # --- COMUNICAÇÃO ---
 def chamar_ia(mensagens):
     global USAGE_DATA, MODELO_ATUAL
-    USAGE_DATA["requests"] += 1
+    USAGE_DATA["requests"] = USAGE_DATA.get("requests", 0) + 1
     
     api_url = f"{SERVER_URL}/api/chat"
     data = {"messages": mensagens, "model": MODELO_ATUAL}
@@ -97,7 +101,7 @@ def chamar_ia(mensagens):
             dados = json.loads(response.read().decode("utf-8"))
             
             tokens = dados.get("usage", {}).get("total_tokens", 0)
-            USAGE_DATA["tokens_usados"] += tokens
+            USAGE_DATA["tokens_usados"] = USAGE_DATA.get("tokens_usados", 0) + tokens
             salvar_usage(USAGE_DATA)
             
             MODELO_ATUAL = dados.get("modelo_usado", MODELO_ATUAL)
@@ -115,7 +119,7 @@ def compactar_historico(mensagens):
     if resumo.startswith("ERRO"): return mensagens
     return [{"role": "system", "content": f"Resumo: {resumo}"}, mensagens[-1]]
 
-# --- EXECUÇÃO DE FERRAMENTAS (CLEAN UI) ---
+# --- EXECUÇÃO DE FERRAMENTAS ---
 def executar_ferramenta(resposta):
     try:
         if "```json" in resposta: resposta = resposta.split("```json")[1].split("```")[0]
@@ -129,10 +133,9 @@ def executar_ferramenta(resposta):
             if ferramenta == "create_file":
                 alvo = os.path.dirname(os.path.abspath(acao.get("path", ""))) or os.getcwd()
             
-            if not pedir_permissao(alvo):
-                return "Cancelado."
+            if not pedir_permissao(alvo): return "Cancelado."
 
-            limpar_tela() # Limpa o terminal para a UI ficar clean
+            limpar_tela()
             
             if ferramenta == "run_command":
                 cmd = acao.get("command")
@@ -184,7 +187,8 @@ def mostrar_usage():
         f"[bold green]Modelo Atual:[/bold green] {MODELO_ATUAL}\n"
         f"[bold]Tokens usados:[/bold] {usados} / {LIMITE_SEMANAL}\n"
         f"[{cor}]{barra}[/{cor}] {percentagem:.1f}%\n"
-        f"[bold yellow]Restantes:[/bold yellow] {restantes}",
+        f"[bold yellow]Restantes:[/bold yellow] {restantes}\n"
+        f"[dim]Requests: {USAGE_DATA.get('requests', 0)}[/dim]",
         title="📊 Usage", border_style="blue"
     ))
 
@@ -212,7 +216,7 @@ def menu_models():
 def main():
     global MODELO_ATUAL
     limpar_tela()
-    console.print(Panel("[bold green]🦁 Tiny Cloud CLI v4.0[/bold green]\nDigita [bold cyan]/help[/bold cyan] para começar.", border_style="green"))
+    console.print(Panel("[bold green]🦁 Tiny Cloud CLI v4.1[/bold green]\nDigita [bold cyan]/help[/bold cyan] para começar.", border_style="green"))
     
     session_id = str(uuid.uuid4())[:8]
     try:
@@ -223,7 +227,7 @@ def main():
     if os.getcwd() not in DIRETORIOS_CONFIAVEIS:
         pedir_permissao(os.getcwd())
         limpar_tela()
-        console.print(Panel("[bold green]🦁 Tiny Cloud CLI v4.0[/bold green]\nDigita [bold cyan]/help[/bold cyan] para começar.", border_style="green"))
+        console.print(Panel("[bold green]🦁 Tiny Cloud CLI v4.1[/bold green]\nDigita [bold cyan]/help[/bold cyan] para começar.", border_style="green"))
     
     while True:
         try:
@@ -251,7 +255,6 @@ def main():
             
             mensagens.append({"role": "user", "content": prompt})
             
-            # Spinner discreto
             with console.status("[dim]Pensando...[/dim]", spinner="dots"):
                 pass
             
@@ -264,7 +267,6 @@ def main():
                     mensagens.append({"role": "user", "content": f"Resultado:\n{resultado}"})
                     continue
                 
-                # Limpa a tela e mostra SÓ a resposta final do agente
                 limpar_tela()
                 console.print(Panel(Markdown(resposta), title=f"🤖 Tiny ({MODELO_ATUAL})", border_style="green"))
                 break
