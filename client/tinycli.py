@@ -10,12 +10,23 @@ from rich.live import Live
 from rich.syntax import Syntax
 import pyfiglet
 
+# Importações do Prompt Toolkit para a UI de baixo
+from prompt_toolkit import PromptSession
+from prompt_toolkit.styles import Style as PtStyle
+from prompt_toolkit.formatted_text import HTML
+
 console = Console()
 custom_style = Style([
     ('qmark', 'fg:#00ff00 bold'), ('question', 'fg:#00bfff bold'),
     ('answer', 'fg:#00ff00 bold'), ('pointer', 'fg:#ffaa00 bold'),
     ('highlighted', 'fg:#00ff00 bold'), ('selected', 'fg:#00ff00')
 ])
+
+# Estilo do Prompt Toolkit (Cinza e Branco)
+pt_style = PtStyle.from_dict({
+    'prompt': 'bg:#333333 #ffffff bold',
+    'bottom-toolbar': 'bg:#000000 #ffffff',
+})
 
 SERVER_URL = os.environ.get("TINY_SERVER_URL", "https://tinycli.onrender.com")
 TRUST_FILE = os.path.expanduser("~/.tinycli_trust")
@@ -159,71 +170,84 @@ def compactar_historico(mensagens):
     if resumo.startswith("ERRO"): return mensagens
     return [{"role": "system", "content": f"Resumo: {resumo}"}, mensagens[-1]]
 
-# --- EXECUÇÃO DE FERRAMENTAS COM AUTOCORREÇÃO ---
 def executar_ferramenta(resposta):
     try:
-        # Tenta extrair JSON limpo
-        if "```json" in resposta: resposta_limpa = resposta.split("```json")[1].split("```")[0]
-        elif "```" in resposta: resposta_limpa = resposta.split("```")[1].split("```")[0]
-        else: resposta_limpa = resposta
+        if "```json" in resposta: resposta = resposta.split("```json")[1].split("```")[0]
+        elif "```" in resposta: resposta = resposta.split("```")[1].split("```")[0]
 
-        acao = json.loads(resposta_limpa.strip())
+        acao = json.loads(resposta.strip())
         ferramenta = acao.get("tool")
-        pensamento = acao.get("thinking", "Sem pensamento detalhado.") # Se o modelo enviar
         
-        if ferramenta in ["run_command", "create_file", "run_code"]:
+        if ferramenta in ["run_command", "create_file", "run_code", "list_directory", "read_file", "web_search"]:
             alvo = os.getcwd()
-            if ferramenta == "create_file":
+            if ferramenta in ["create_file", "read_file"]:
                 alvo = os.path.dirname(os.path.abspath(acao.get("path", ""))) or os.getcwd()
             
             if not pedir_permissao(alvo): return "Cancelado.", False
-
             limpar_tela()
-            
-            # Mostra o Pensamento (Thinking)
-            if pensamento and pensamento != "Sem pensamento detalhado.":
-                console.print(Panel(f"[italic dim]{pensamento}[/italic dim]", title="🧠 Pensamento da IA", border_style="magenta"))
             
             if ferramenta == "run_command":
                 cmd = acao.get("command")
                 if verificar_comando_perigoso(cmd):
                     mostrar_ban_aviso()
                     return "ACÇÃO BLOQUEADA: VIOLAÇÃO DOS TERMOS DE SERVIÇO.", False
-                
-                console.print(Panel(f"[bold yellow]⚙️ O Agente quer rodar:[/bold yellow] {cmd}", border_style="yellow"))
+                console.print(Panel(f"[bold yellow]⚙️ Executando:[/bold yellow] {cmd}", border_style="yellow"))
                 res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
                 saida = (res.stdout + res.stderr).strip()
-                
                 if res.returncode != 0:
-                    console.print(Panel(f"[bold red]❌ Erro na execução:[/bold red]\n{saida}", border_style="red"))
-                    return f"Erro no comando:\n{saida}", True # Retorna True para indicar erro
-                
-                console.print(Panel(f"[bold green]✅ Sucesso:[/bold green]\n{saida}", border_style="green"))
-                return (saida or "Comando executado com sucesso."), False
+                    return f"Erro no comando:\n{saida}", True
+                return (saida or "Comando executado."), False
                 
             elif ferramenta == "create_file":
                 path, content = acao.get("path"), acao.get("content")
-                console.print(Panel(f"[bold cyan]📝 O Agente quer criar:[/bold cyan] {path}", border_style="cyan"))
-                syntax = Syntax(content, "python", theme="monokai", line_numbers=False)
-                with Live(syntax, refresh_per_second=10, console=console):
-                    if os.path.dirname(path): os.makedirs(os.path.dirname(path), exist_ok=True)
-                    with open(path, "w", encoding="utf-8") as f: f.write(content)
-                    time.sleep(0.5)
-                console.print(f"[green]✅ Arquivo {path} criado com sucesso.[/green]")
+                console.print(Panel(f"[bold cyan]📝 Criando arquivo:[/bold cyan] {path}", border_style="cyan"))
+                with open(path, "w", encoding="utf-8") as f: f.write(content)
                 return f"Arquivo {path} criado.", False
 
             elif ferramenta == "run_code":
                 code = acao.get("code")
-                console.print(Panel("[bold yellow]🐍 O Agente quer executar Python[/bold yellow]", border_style="yellow"))
+                console.print(Panel("[bold yellow]🐍 Executando Python[/bold yellow]", border_style="yellow"))
                 res = subprocess.run(["python3", "-c", code], capture_output=True, text=True)
                 saida = (res.stdout + res.stderr).strip()
-                
                 if res.returncode != 0:
-                    console.print(Panel(f"[bold red]❌ Erro no código:[/bold red]\n{saida}", border_style="red"))
                     return f"Erro no código Python:\n{saida}", True
+                return (saida or "Código executado."), False
                 
-                console.print(Panel(f"[bold green]✅ Sucesso:[/bold green]\n{saida}", border_style="green"))
-                return (saida or "Código executado com sucesso."), False
+            elif ferramenta == "list_directory":
+                path = acao.get("path", ".")
+                console.print(Panel(f"[bold cyan]📁 Listando:[/bold cyan] {path}", border_style="cyan"))
+                try:
+                    itens = os.listdir(path)
+                    return f"Arquivos em {path}:\n" + "\n".join(itens), False
+                except Exception as e:
+                    return f"Erro ao listar: {e}", True
+                    
+            elif ferramenta == "read_file":
+                path = acao.get("path")
+                console.print(Panel(f"[bold cyan]📖 Lendo:[/bold cyan] {path}", border_style="cyan"))
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        conteudo = f.read()
+                    return f"Conteúdo de {path}:\n{conteudo}", False
+                except Exception as e:
+                    return f"Erro ao ler: {e}", True
+                    
+            elif ferramenta == "web_search":
+                query = acao.get("query")
+                console.print(Panel(f"[bold cyan]🌐 Pesquisando:[/bold cyan] {query}", border_style="cyan"))
+                try:
+                    import urllib.parse
+                    import re
+                    url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
+                    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                    with urllib.request.urlopen(req, timeout=10) as r:
+                        html = r.read().decode('utf-8')
+                        resultados = re.findall(r'<a rel="nofollow" class="result__a" href="(.*?)">(.*?)</a>', html)[:3]
+                        if resultados:
+                            return "Resultados:\n" + "\n".join([f"{titulo} - {link}" for link, titulo in resultados]), False
+                        return "Nenhum resultado encontrado.", False
+                except Exception as e:
+                    return f"Erro na pesquisa: {e}", True
 
         return None, False
     except json.JSONDecodeError:
@@ -290,9 +314,9 @@ def gerar_banner():
     except:
         return "TINY CLI"
 
-def barra_status(session_id):
-    status = f"[dim]Modelo: [bold]{MODELO_ATUAL}[/bold] | Sessão: {session_id} | Tema: {TEMA_ATUAL} | Tokens: {USAGE_DATA.get('tokens_usados', 0)}/{LIMITE_SEMANAL}[/dim]"
-    console.print(Panel(status, border_style="dim", padding=(0, 1)))
+def get_bottom_toolbar():
+    usados = USAGE_DATA.get("tokens_usados", 0)
+    return HTML(f'<style bg="black" fg="white">  Modelo: {MODELO_ATUAL}  |  Tokens: {usados}/{LIMITE_SEMANAL}  </style>')
 
 def main():
     global MODELO_ATUAL, TEMA_ATUAL
@@ -305,7 +329,7 @@ def main():
             limpar_tela()
     
     banner_art = gerar_banner()
-    console.print(Panel(f"[bold green]{banner_art}[/bold green]\n[dim]v6.0 - Agent Loop Edition[/dim]\n\nDigita [bold cyan]/help[/bold cyan] para começar.", border_style="green", title="🦁 Tiny Cloud CLI", subtitle="Benchmarks are honest"))
+    console.print(Panel(f"[bold green]{banner_art}[/bold green]\n[dim]v7.5 - Full Agent Skills[/dim]\n\nDigita [bold cyan]/help[/bold cyan] para começar.", border_style="green", title="🦁 Tiny Cloud CLI", subtitle="Benchmarks are honest"))
     
     session_id = str(uuid.uuid4())[:8]
     try:
@@ -320,15 +344,22 @@ def main():
     if os.getcwd() not in DIRETORIOS_CONFIAVEIS:
         pedir_permissao(os.getcwd())
         limpar_tela()
-        console.print(Panel(f"[bold green]{banner_art}[/bold green]\n[dim]v6.0 - Agent Loop Edition[/dim]\n\nDigita [bold cyan]/help[/bold cyan] para começar.", border_style="green", title="🦁 Tiny Cloud CLI", subtitle="Benchmarks are honest"))
+        console.print(Panel(f"[bold green]{banner_art}[/bold green]\n[dim]v7.5 - Full Agent Skills[/dim]\n\nDigita [bold cyan]/help[/bold cyan] para começar.", border_style="green", title="🦁 Tiny Cloud CLI", subtitle="Benchmarks are honest"))
+    
+    session = PromptSession(
+        style=pt_style,
+        bottom_toolbar=get_bottom_toolbar
+    )
     
     while True:
         try:
-            barra_status(session_id)
-            prompt = questionary.text("👤 Tu:", style=custom_style, qmark="").ask()
-            if prompt is None: continue
+            prompt_texto = session.prompt(
+                HTML('<style bg="#333333" fg="#ffffff">  Escreve aqui!  </style> '),
+            )
+            
+            if prompt_texto is None: continue
                 
-            cmd = prompt.lower().strip()
+            cmd = prompt_texto.lower().strip()
             
             if cmd in ["/help", "help"]: mostrar_help(); continue
             elif cmd == "/usage": mostrar_usage(); continue
@@ -348,11 +379,10 @@ def main():
             elif cmd in ["sair", "exit"]:
                 salvar_sessao(session_id, mensagens)
                 break
-            elif not prompt.strip(): continue
+            elif not prompt_texto.strip(): continue
             
-            mensagens.append({"role": "user", "content": prompt})
+            mensagens.append({"role": "user", "content": prompt_texto})
             
-            # Loop de Agente (Autocorreção)
             tentativas = 0
             max_tentativas = 5
             
@@ -366,7 +396,6 @@ def main():
                 
                 if resultado:
                     if deu_erro:
-                        # Se deu erro, manda a mensagem de volta e pede para ele corrigir!
                         mensagens.append({"role": "user", "content": f"A execução falhou com o seguinte erro:\n{resultado}\n\nPor favor, analisa o erro, corrige o código/comando e tenta novamente para obter uma execução estável."})
                         tentativas += 1
                         console.print("[yellow]⚠️ Erro detetado. O agente está a tentar corrigir...[/yellow]")
@@ -374,17 +403,15 @@ def main():
                         limpar_tela()
                         continue
                     else:
-                        # Deu certo! Manda o resultado para a IA responder ao utilizador
                         mensagens.append({"role": "user", "content": f"Resultado da ferramenta:\n{resultado}"})
                         continue
                 else:
-                    # É a resposta final do agente
                     limpar_tela()
                     console.print(Panel(Markdown(resposta), title=f"🤖 Tiny ({MODELO_ATUAL})", border_style="green"))
                     break
             
             if tentativas >= max_tentativas:
-                console.print(Panel("[red]O agente atingiu o limite máximo de 5 tentativas sem conseguir uma execução estável.[/red]", border_style="red"))
+                console.print(Panel("[red]O agente atingiu o limite máximo de 5 tentativas.[/red]", border_style="red"))
 
             salvar_sessao(session_id, mensagens)
                 
