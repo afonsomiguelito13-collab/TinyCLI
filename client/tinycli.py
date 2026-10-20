@@ -29,17 +29,15 @@ MODELOS_DISPONIVEIS = [
 ]
 MODELO_ATUAL = MODELOS_DISPONIVEIS[0]
 LIMITE_SEMANAL = 50000
-TEMA_ATUAL = "dark" # "dark" ou "light"
+TEMA_ATUAL = "dark"
 
-# --- SISTEMA DE BAN ---
 COMANDOS_PROIBIDOS = [
     "rm -rf", "rm -r /", "reboot", "shutdown", "mkfs", "dd if=",
     "flash", "fastboot", "wipe", "format", "chmod -R 777", "chown -R"
 ]
 
 def verificar_comando_perigoso(cmd):
-    cmd_lower = cmd.lower()
-    return any(proibido in cmd_lower for proibido in COMANDOS_PROIBIDOS)
+    return any(proibido in cmd.lower() for proibido in COMANDOS_PROIBIDOS)
 
 def mostrar_ban_aviso():
     texto_ban = (
@@ -51,7 +49,6 @@ def mostrar_ban_aviso():
     )
     console.print(Panel(texto_ban, border_style="red", title="[bold red]🚫 SISTEMA DE BAN[/bold red]"))
 
-# --- TERMOS DE SERVIÇO ---
 def aceitar_termos():
     limpar_tela()
     console.print(Panel(
@@ -84,7 +81,6 @@ def aceitar_termos():
 def limpar_tela():
     os.system('clear' if os.name == 'posix' else 'cls')
 
-# --- GESTÃO DE SESSÕES E USAGE ---
 def listar_sessoes():
     if not os.path.exists(SESSIONS_DIR): return []
     return [f.replace(".json", "") for f in os.listdir(SESSIONS_DIR) if f.endswith(".json")]
@@ -118,7 +114,6 @@ def salvar_usage(data):
 
 USAGE_DATA = carregar_usage()
 
-# --- CONFIANÇA ---
 def carregar_confiaveis():
     if os.path.exists(TRUST_FILE):
         with open(TRUST_FILE, "r") as f: return set(f.read().splitlines())
@@ -136,7 +131,6 @@ def pedir_permissao(caminho):
         return True
     return False
 
-# --- COMUNICAÇÃO ---
 def chamar_ia(mensagens):
     global USAGE_DATA, MODELO_ATUAL
     USAGE_DATA["requests"] += 1
@@ -165,52 +159,76 @@ def compactar_historico(mensagens):
     if resumo.startswith("ERRO"): return mensagens
     return [{"role": "system", "content": f"Resumo: {resumo}"}, mensagens[-1]]
 
-# --- EXECUÇÃO DE FERRAMENTAS ---
+# --- EXECUÇÃO DE FERRAMENTAS COM AUTOCORREÇÃO ---
 def executar_ferramenta(resposta):
     try:
-        if "```json" in resposta: resposta = resposta.split("```json")[1].split("```")[0]
-        elif "```" in resposta: resposta = resposta.split("```")[1].split("```")[0]
+        # Tenta extrair JSON limpo
+        if "```json" in resposta: resposta_limpa = resposta.split("```json")[1].split("```")[0]
+        elif "```" in resposta: resposta_limpa = resposta.split("```")[1].split("```")[0]
+        else: resposta_limpa = resposta
 
-        acao = json.loads(resposta.strip())
+        acao = json.loads(resposta_limpa.strip())
         ferramenta = acao.get("tool")
+        pensamento = acao.get("thinking", "Sem pensamento detalhado.") # Se o modelo enviar
         
         if ferramenta in ["run_command", "create_file", "run_code"]:
             alvo = os.getcwd()
             if ferramenta == "create_file":
                 alvo = os.path.dirname(os.path.abspath(acao.get("path", ""))) or os.getcwd()
             
-            if not pedir_permissao(alvo): return "Cancelado."
+            if not pedir_permissao(alvo): return "Cancelado.", False
+
             limpar_tela()
+            
+            # Mostra o Pensamento (Thinking)
+            if pensamento and pensamento != "Sem pensamento detalhado.":
+                console.print(Panel(f"[italic dim]{pensamento}[/italic dim]", title="🧠 Pensamento da IA", border_style="magenta"))
             
             if ferramenta == "run_command":
                 cmd = acao.get("command")
                 if verificar_comando_perigoso(cmd):
                     mostrar_ban_aviso()
-                    return "ACÇÃO BLOQUEADA: VIOLAÇÃO DOS TERMOS DE SERVIÇO."
-                console.print(Panel(f"[bold yellow]⚙️ Executando:[/bold yellow] {cmd}", border_style="yellow"))
+                    return "ACÇÃO BLOQUEADA: VIOLAÇÃO DOS TERMOS DE SERVIÇO.", False
+                
+                console.print(Panel(f"[bold yellow]⚙️ O Agente quer rodar:[/bold yellow] {cmd}", border_style="yellow"))
                 res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-                return (res.stdout + res.stderr) or "Comando executado."
+                saida = (res.stdout + res.stderr).strip()
+                
+                if res.returncode != 0:
+                    console.print(Panel(f"[bold red]❌ Erro na execução:[/bold red]\n{saida}", border_style="red"))
+                    return f"Erro no comando:\n{saida}", True # Retorna True para indicar erro
+                
+                console.print(Panel(f"[bold green]✅ Sucesso:[/bold green]\n{saida}", border_style="green"))
+                return (saida or "Comando executado com sucesso."), False
                 
             elif ferramenta == "create_file":
                 path, content = acao.get("path"), acao.get("content")
-                console.print(Panel(f"[bold cyan]📝 Criando arquivo:[/bold cyan] {path}", border_style="cyan"))
+                console.print(Panel(f"[bold cyan]📝 O Agente quer criar:[/bold cyan] {path}", border_style="cyan"))
                 syntax = Syntax(content, "python", theme="monokai", line_numbers=False)
                 with Live(syntax, refresh_per_second=10, console=console):
                     if os.path.dirname(path): os.makedirs(os.path.dirname(path), exist_ok=True)
                     with open(path, "w", encoding="utf-8") as f: f.write(content)
                     time.sleep(0.5)
-                return f"Arquivo {path} criado."
+                console.print(f"[green]✅ Arquivo {path} criado com sucesso.[/green]")
+                return f"Arquivo {path} criado.", False
 
             elif ferramenta == "run_code":
                 code = acao.get("code")
-                console.print(Panel("[bold yellow]🐍 Executando Python[/bold yellow]", border_style="yellow"))
+                console.print(Panel("[bold yellow]🐍 O Agente quer executar Python[/bold yellow]", border_style="yellow"))
                 res = subprocess.run(["python3", "-c", code], capture_output=True, text=True)
-                return (res.stdout + res.stderr) or "Código executado."
-        return None
-    except json.JSONDecodeError:
-        return None
+                saida = (res.stdout + res.stderr).strip()
+                
+                if res.returncode != 0:
+                    console.print(Panel(f"[bold red]❌ Erro no código:[/bold red]\n{saida}", border_style="red"))
+                    return f"Erro no código Python:\n{saida}", True
+                
+                console.print(Panel(f"[bold green]✅ Sucesso:[/bold green]\n{saida}", border_style="green"))
+                return (saida or "Código executado com sucesso."), False
 
-# --- MENUS ---
+        return None, False
+    except json.JSONDecodeError:
+        return None, False
+
 def mostrar_help():
     table = Table(title="🦁 Tiny CLI - Comandos", show_header=True, header_style="bold green")
     table.add_column("Comando", style="cyan", width=15)
@@ -220,7 +238,7 @@ def mostrar_help():
     table.add_row("/usage", "Mostra a cota")
     table.add_row("/session", "Gerencia sessões")
     table.add_row("/compact", "Resume a conversa")
-    table.add_row("/theme", "Muda o tema (dark/light)")
+    table.add_row("/theme", "Muda o tema")
     table.add_row("/clear", "Limpa o terminal")
     console.print(table)
 
@@ -272,12 +290,10 @@ def gerar_banner():
     except:
         return "TINY CLI"
 
-# --- BARRA DE STATUS (Inspirada no Codex/OpenCode) ---
 def barra_status(session_id):
     status = f"[dim]Modelo: [bold]{MODELO_ATUAL}[/bold] | Sessão: {session_id} | Tema: {TEMA_ATUAL} | Tokens: {USAGE_DATA.get('tokens_usados', 0)}/{LIMITE_SEMANAL}[/dim]"
     console.print(Panel(status, border_style="dim", padding=(0, 1)))
 
-# --- LOOP PRINCIPAL ---
 def main():
     global MODELO_ATUAL, TEMA_ATUAL
     limpar_tela()
@@ -289,7 +305,7 @@ def main():
             limpar_tela()
     
     banner_art = gerar_banner()
-    console.print(Panel(f"[bold green]{banner_art}[/bold green]\n[dim]v5.0 - UI Inspirada no Codex/OpenCode[/dim]\n\nDigita [bold cyan]/help[/bold cyan] para começar.", border_style="green", title="🦁 Tiny Cloud CLI", subtitle="Benchmarks are honest"))
+    console.print(Panel(f"[bold green]{banner_art}[/bold green]\n[dim]v6.0 - Agent Loop Edition[/dim]\n\nDigita [bold cyan]/help[/bold cyan] para começar.", border_style="green", title="🦁 Tiny Cloud CLI", subtitle="Benchmarks are honest"))
     
     session_id = str(uuid.uuid4())[:8]
     try:
@@ -304,12 +320,14 @@ def main():
     if os.getcwd() not in DIRETORIOS_CONFIAVEIS:
         pedir_permissao(os.getcwd())
         limpar_tela()
-        console.print(Panel(f"[bold green]{banner_art}[/bold green]\n[dim]v5.0 - UI Inspirada no Codex/OpenCode[/dim]\n\nDigita [bold cyan]/help[/bold cyan] para começar.", border_style="green", title="🦁 Tiny Cloud CLI", subtitle="Benchmarks are honest"))
+        console.print(Panel(f"[bold green]{banner_art}[/bold green]\n[dim]v6.0 - Agent Loop Edition[/dim]\n\nDigita [bold cyan]/help[/bold cyan] para começar.", border_style="green", title="🦁 Tiny Cloud CLI", subtitle="Benchmarks are honest"))
     
     while True:
         try:
             barra_status(session_id)
-            prompt = console.input(f"[bold blue]👤 Tu:[/bold blue] ")
+            prompt = questionary.text("👤 Tu:", style=custom_style, qmark="").ask()
+            if prompt is None: continue
+                
             cmd = prompt.lower().strip()
             
             if cmd in ["/help", "help"]: mostrar_help(); continue
@@ -333,21 +351,41 @@ def main():
             elif not prompt.strip(): continue
             
             mensagens.append({"role": "user", "content": prompt})
-            with console.status("[dim]Pensando...[/dim]", spinner="dots"): pass
             
-            while True:
+            # Loop de Agente (Autocorreção)
+            tentativas = 0
+            max_tentativas = 5
+            
+            while tentativas < max_tentativas:
+                with console.status(f"[dim]Pensando... (Tentativa {tentativas+1})[/dim]", spinner="dots"): pass
+                
                 resposta = chamar_ia(mensagens)
                 mensagens.append({"role": "assistant", "content": resposta})
                 
-                resultado = executar_ferramenta(resposta)
-                if resultado:
-                    mensagens.append({"role": "user", "content": f"Resultado:\n{resultado}"})
-                    continue
+                resultado, deu_erro = executar_ferramenta(resposta)
                 
-                limpar_tela()
-                console.print(Panel(Markdown(resposta), title=f"🤖 Tiny ({MODELO_ATUAL})", border_style="green"))
-                break
+                if resultado:
+                    if deu_erro:
+                        # Se deu erro, manda a mensagem de volta e pede para ele corrigir!
+                        mensagens.append({"role": "user", "content": f"A execução falhou com o seguinte erro:\n{resultado}\n\nPor favor, analisa o erro, corrige o código/comando e tenta novamente para obter uma execução estável."})
+                        tentativas += 1
+                        console.print("[yellow]⚠️ Erro detetado. O agente está a tentar corrigir...[/yellow]")
+                        time.sleep(1)
+                        limpar_tela()
+                        continue
+                    else:
+                        # Deu certo! Manda o resultado para a IA responder ao utilizador
+                        mensagens.append({"role": "user", "content": f"Resultado da ferramenta:\n{resultado}"})
+                        continue
+                else:
+                    # É a resposta final do agente
+                    limpar_tela()
+                    console.print(Panel(Markdown(resposta), title=f"🤖 Tiny ({MODELO_ATUAL})", border_style="green"))
+                    break
             
+            if tentativas >= max_tentativas:
+                console.print(Panel("[red]O agente atingiu o limite máximo de 5 tentativas sem conseguir uma execução estável.[/red]", border_style="red"))
+
             salvar_sessao(session_id, mensagens)
                 
         except KeyboardInterrupt:
