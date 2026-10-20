@@ -4,8 +4,8 @@ import subprocess
 import os
 import urllib.request
 import glob
+import re
 
-# --- CONFIGURAÇÕES ---
 SERVER_URL = "https://tinycli.onrender.com/api/chat" 
 SESSIONS_DIR = os.path.expanduser("~/.local/share/.tinycli_sessions")
 USAGE_FILE = os.path.expanduser("~/.local/share/.tinycli_usage.json")
@@ -62,46 +62,65 @@ class TinyWebServer(BaseHTTPRequestHandler):
                 self.wfile.write(b"<h1>Erro: index.html nao encontrado</h1>")
 
     def do_POST(self):
-        if self.path == "/chat":
-            content_length = int(self.headers['Content-Length'])
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
             post_data = self.rfile.read(content_length)
             data = json.loads(post_data.decode('utf-8'))
-            
-            prompt = data.get("prompt")
-            model = data.get("model")
-            session_id = data.get("session_id", "nova")
 
-            self._set_headers()
+            if self.path == "/chat":
+                prompt = data.get("prompt")
+                model = data.get("model")
+                session_id = data.get("session_id", "nova")
+                self._set_headers()
 
-            req_data = json.dumps({"messages": [{"role": "user", "content": prompt}], "model": model}).encode()
-            req = urllib.request.Request(SERVER_URL, data=req_data, headers={'Content-Type': 'application/json'}, method="POST")
-            
-            try:
-                with urllib.request.urlopen(req) as response:
-                    res_data = json.loads(response.read().decode())
-                    reply = res_data["choices"][0]["message"]["content"]
-                    
-                    if "```json" in reply: reply = reply.split("```json")[1].split("```")[0]
-                    elif "```" in reply: reply = reply.split("```")[1].split("```")[0]
+                req_data = json.dumps({"messages": [{"role": "user", "content": prompt}], "model": model}).encode()
+                req = urllib.request.Request(SERVER_URL, data=req_data, headers={'Content-Type': 'application/json'}, method="POST")
+                
+                try:
+                    with urllib.request.urlopen(req) as response:
+                        res_data = json.loads(response.read().decode())
+                        reply = res_data["choices"][0]["message"]["content"]
                         
-                    try:
-                        action = json.loads(reply.strip())
-                        if action.get("tool") == "run_command" or action.get("tool") == "run_code":
-                            cmd = action.get("command") or action.get("code")
-                            output = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-                            final_reply = f"**Executado:** `{cmd}`\n\n**Saída:**\n```bash\n{output.stdout}{output.stderr}\n```"
-                            
-                            self._save_session(session_id, prompt, final_reply)
-                            self.wfile.write(json.dumps({"reply": final_reply}).encode())
-                            return
-                    except json.JSONDecodeError:
-                        pass 
+                        exec_command = None
+                        
+                        # Remove blocos JSON que a IA mandou para o utilizador não ver código sujo
+                        if "```json" in reply: 
+                            json_part = reply.split("```json")[1].split("```")[0]
+                            reply = reply.replace(f"```json\n{json_part}\n```", "") # Limpa o JSON
+                        elif "```" in reply:
+                            json_part = reply.split("```")[1].split("```")[0]
+                            try:
+                                # Tenta ver se o bloco de código é um comando
+                                action = json.loads(json_part.strip())
+                                if action.get("tool") in ["run_command", "run_code"]:
+                                    exec_command = action.get("command") or action.get("code")
+                                    reply = "Pedi para executar o comando abaixo. Clica no botão para correr no Termux."
+                            except json.JSONDecodeError:
+                                pass # É só um bloco de código normal, deixa ficar
 
-                    self._save_session(session_id, prompt, reply)
-                    self.wfile.write(json.dumps({"reply": reply}).encode())
+                        # Limpeza extra de separadores estranhos (===, ---) no texto
+                        reply = re.sub(r'\n={3,}\n', '\n', reply)
+                        reply = re.sub(r'\n-{3,}\n', '\n', reply)
 
-            except Exception as e:
-                self.wfile.write(json.dumps({"reply": f"Erro no servidor: {e}"}).encode())
+                        self._save_session(session_id, prompt, reply)
+                        self.wfile.write(json.dumps({"reply": reply, "exec_command": exec_command}).encode())
+
+                except Exception as e:
+                    self.wfile.write(json.dumps({"reply": f"Erro na IA: {e}"}).encode())
+                    
+            elif self.path == "/execute":
+                cmd = data.get("command")
+                self._set_headers()
+                try:
+                    output = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+                    result = output.stdout + output.stderr
+                    if not result: result = "Comando executado com sucesso (sem saída)."
+                    self.wfile.write(json.dumps({"output": result}).encode())
+                except Exception as e:
+                    self.wfile.write(json.dumps({"output": f"Erro: {e}"}).encode())
+        except Exception as e:
+            self._set_headers()
+            self.wfile.write(json.dumps({"reply": f"Erro crítico: {e}", "exec_command": None}).encode())
 
     def _save_session(self, session_id, user_msg, bot_msg):
         os.makedirs(SESSIONS_DIR, exist_ok=True)
@@ -110,15 +129,12 @@ class TinyWebServer(BaseHTTPRequestHandler):
         if os.path.exists(filepath):
             with open(filepath, "r") as f:
                 messages = json.load(f)
-        
         messages.append({"role": "user", "content": user_msg})
         messages.append({"role": "assistant", "content": bot_msg})
-        
         with open(filepath, "w") as f:
             json.dump(messages, f)
 
 if __name__ == "__main__":
     print(f"🦁 TinyCLI Web Server a correr em http://localhost:{PORT}")
-    print("Mantém esta janela aberta no Termux.")
     server = HTTPServer(('127.0.0.1', PORT), TinyWebServer)
     server.serve_forever()
