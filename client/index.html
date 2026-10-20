@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TinyCLI Web</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* --- FONTES OFICIAIS (FALLBACK DO CHATGPT) --- */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        :root {
+            --bg-main: #EBE9E1;
+            --bg-sidebar: #F5F4EF;
+            --text-main: #1A1A1A;
+            --text-muted: #7A7A7A;
+            --border-color: #DCD8D0;
+            --input-bg: #F5F4EF;
+            --badge-bg: #A38877;
+            --badge-text: #FFFFFF;
+            --font-stack: 'Söhne', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            
+            /* Animação de Mola (Spring) */
+            --spring: cubic-bezier(0.175, 0.885, 0.32, 1.1);
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font-stack); -webkit-tap-highlight-color: transparent; }
+        body { background-color: var(--bg-main); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; }
+        
+        /* --- SIDEBAR (Menu Lateral) --- */
+        #sidebar-overlay {
+            position: absolute; inset: 0; background: rgba(0,0,0,0.2); z-index: 90; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+        }
+        #sidebar-overlay.open { opacity: 1; pointer-events: auto; }
+        
+        #sidebar { 
+            position: absolute; left: -300px; top: 0; bottom: 0; width: 300px; 
+            background-color: var(--bg-sidebar); border-right: 1px solid var(--border-color); 
+            display: flex; flex-direction: column; padding: 25px 15px; z-index: 100;
+            transition: transform 0.4s var(--spring); box-shadow: 4px 0 24px rgba(0,0,0,0.05);
+        }
+        #sidebar.open { transform: translateX(300px); }
+        
+        .sidebar-header { font-size: 1.6rem; font-weight: 800; display: flex; align-items: center; justify-content: space-between; padding: 0 10px 25px 10px; letter-spacing: -0.5px; color: #1A1A1A;}
+        .sidebar-header i { width: 20px; height: 20px; }
+        
+        .sidebar-btn { display: flex; align-items: center; gap: 12px; padding: 12px 10px; border-radius: 10px; cursor: pointer; font-weight: 500; font-size: 0.95rem; margin-bottom: 2px; transition: background 0.2s;}
+        .sidebar-btn:hover { background-color: #EBE9E1; }
+        .sidebar-btn i { width: 20px; height: 20px; color: #555;}
+        
+        .badge { background-color: var(--badge-bg); color: var(--badge-text); font-size: 0.75rem; padding: 4px 10px; border-radius: 12px; margin-left: auto; font-weight: 600;}
+        
+        .section-title { display: flex; justify-content: space-between; align-items: center; font-size: 0.95rem; font-weight: 500; padding: 20px 10px 10px 10px; color: #444; }
+        
+        #chat-list { list-style: none; overflow-y: auto; flex: 1; }
+        #chat-list li { padding: 10px; cursor: pointer; border-radius: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.9rem; color: #555; transition: background 0.2s;}
+        #chat-list li:hover { background-color: #EBE9E1; }
+        
+        /* --- MAIN CHAT --- */
+        #main { flex: 1; display: flex; flex-direction: column; position: relative; width: 100%; }
+        #top-bar { padding: 20px; display: flex; align-items: center; gap: 15px; font-size: 1.1rem; font-weight: 500; z-index: 10;}
+        #menu-btn { cursor: pointer; transition: transform 0.2s; color: #333;}
+        #menu-btn:active { transform: scale(0.9); }
+        #usage-display { margin-left: auto; font-size: 0.8rem; color: #444; background: #DCD8D0; padding: 5px 12px; border-radius: 12px; font-weight: 600;}
+        
+        #chat-container { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 20px; scroll-behavior: smooth;}
+        
+        /* --- ANIMAÇÃO DAS MENSAGENS --- */
+        @keyframes popIn {
+            0% { transform: translateY(15px) scale(0.98); opacity: 0; }
+            100% { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        .message { max-width: 85%; padding: 14px 18px; border-radius: 20px; line-height: 1.5; font-size: 0.95rem; animation: popIn 0.3s var(--spring) forwards; transform-origin: bottom left;}
+        .user { align-self: flex-end; background-color: #DCD8D0; color: #111; border-bottom-right-radius: 6px; transform-origin: bottom right;}
+        .bot { align-self: flex-start; background-color: transparent; border: 1px solid var(--border-color); border-bottom-left-radius: 6px;}
+        .bot pre { background: #1e1e1e; color: #d4d4d4; padding: 12px; border-radius: 10px; overflow-x: auto; font-family: 'SFMono-Regular', Consolas, monospace; margin-top: 10px; font-size: 0.85rem; border: 1px solid #333;}
+        
+        /* --- CENTER LOGO (Agora Tiny) --- */
+        #center-logo { position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; pointer-events: none; transition: opacity 0.3s;}
+        
+        .tiny-logo-text { font-size: 3.5rem; font-weight: 900; letter-spacing: -2px; color: #B0ADA5; line-height: 1; display: flex; align-items: center; gap: 5px;}
+        .tiny-logo-text i { width: 40px; height: 40px; stroke-width: 3; }
+        
+        .project-pill { background-color: #E2DFD5; padding: 6px 14px; border-radius: 16px; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; color: #555; margin-top: 15px; font-weight: 500;}
+        
+        /* --- INPUT AREA --- */
+        footer { padding: 15px 20px 30px 20px; background: linear-gradient(transparent, var(--bg-main) 30%); }
+        .input-wrapper { background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 28px; padding: 15px 20px; display: flex; flex-direction: column; box-shadow: 0 4px 15px rgba(0,0,0,0.03); position: relative;}
+        textarea { border: none; background: transparent; resize: none; outline: none; font-size: 1.05rem; max-height: 120px; padding: 0; color: var(--text-main); width: 100%; line-height: 1.4; font-family: var(--font-stack);}
+        textarea::placeholder { color: #999; }
+        .input-controls { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; }
+        
+        /* --- SELETOR DE MODELO --- */
+        .model-select-container { position: relative; }
+        .model-trigger { display: flex; align-items: center; gap: 6px; font-size: 0.9rem; color: #666; font-weight: 500; cursor: pointer; padding: 6px 0; user-select: none;}
+        .model-trigger i { width: 16px; height: 16px; transition: transform 0.3s var(--spring); color: #888;}
+        .model-trigger.open i { transform: rotate(180deg); }
+        
+        .model-dropdown {
+            position: absolute; bottom: calc(100% + 15px); left: 0; background: var(--input-bg);
+            border: 1px solid var(--border-color); border-radius: 16px; width: 240px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1); overflow: hidden; z-index: 50;
+            transform: translateY(10px) scale(0.95); opacity: 0; pointer-events: none;
+            transition: all 0.3s var(--spring); transform-origin: bottom left;
+        }
+        .model-dropdown.open { transform: translateY(0) scale(1); opacity: 1; pointer-events: auto; }
+        .model-option { padding: 14px 18px; font-size: 0.9rem; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: space-between;}
+        .model-option:hover { background: #EBE9E1; }
+        .model-option.active { font-weight: 700; color: var(--badge-bg); }
+        
+        .actions { display: flex; gap: 15px; align-items: center; }
+        .add-btn { background: transparent; border: none; color: #888; cursor: pointer; display: flex; align-items: center;}
+        .add-btn i { width: 20px; height: 20px; }
+        
+        .send-btn { background-color: #DCD8D0; color: #888; border: none; width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; transform: scale(0.95); transition: all 0.2s var(--spring);}
+        .send-btn i { width: 18px; height: 18px;}
+        .send-btn.active { background-color: var(--badge-bg); color: white; transform: scale(1); }
+        .send-btn:active { transform: scale(0.85); }
+
+    </style>
+</head>
+<body>
+
+    <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <div id="sidebar">
+        <div class="sidebar-header">
+            <span>Tiny CLI</span>
+            <i data-lucide="search" style="cursor:pointer; color:#333;"></i>
+        </div>
+        
+        <div class="sidebar-btn" onclick="newChat()">
+            <i data-lucide="square-pen"></i> New chat
+        </div>
+        <div class="sidebar-btn">
+            <i data-lucide="folder-closed"></i> Daily <span class="badge">Termux</span>
+        </div>
+        <div class="sidebar-btn">
+            <i data-lucide="wallet"></i> Usage <span class="badge" id="sidebar-usage">0k</span>
+        </div>
+        
+        <div class="section-title">
+            <span>Projects</span>
+            <i data-lucide="chevron-right" style="width:18px; cursor:pointer; color:#888;"></i>
+        </div>
+        
+        <div class="section-title">
+            <span>Chats</span>
+            <i data-lucide="chevron-down" style="width:18px; color:#888;"></i>
+        </div>
+        <ul id="chat-list">
+            <!-- Sessões carregadas via JS -->
+        </ul>
+        
+        <div style="padding: 10px; display: flex; justify-content: flex-end;">
+            <i data-lucide="settings" style="width:22px; height:22px; color:#555; cursor:pointer;"></i>
+        </div>
+    </div>
+
+    <div id="main">
+        <div id="top-bar">
+            <i data-lucide="panel-left" id="menu-btn" onclick="toggleSidebar()"></i>
+            <span id="chat-title">New chat</span>
+            <i data-lucide="square-pen" style="margin-left:auto; width:20px; color:#555; cursor:pointer;" onclick="newChat()"></i>
+        </div>
+        
+        <div id="center-logo">
+            <div class="tiny-logo-text"><i data-lucide="terminal"></i> TinyCLI</div>
+            <div class="project-pill"><i data-lucide="folder" style="width:16px;"></i> Localhost <i data-lucide="chevron-down" style="width:16px;"></i></div>
+        </div>
+
+        <div id="chat-container"></div>
+
+        <footer>
+            <div class="input-wrapper">
+                <textarea id="user-input" rows="1" placeholder="Ask TinyCLI..."></textarea>
+                <div class="input-controls">
+                    
+                    <div class="model-select-container">
+                        <div class="model-trigger" id="model-trigger" onclick="toggleModelDropdown(event)">
+                            <span id="current-model-text">DeepSeek V4.1 Flash</span>
+                            <span>High</span>
+                            <i data-lucide="chevron-down"></i>
+                        </div>
+                        <div class="model-dropdown" id="model-dropdown">
+                            <div class="model-option active" data-value="deepseek-v4.1-flash" onclick="selectModel(this)">DeepSeek V4.1 Flash</div>
+                            <div class="model-option" data-value="gemini-3.8-flash" onclick="selectModel(this)">Gemini 3.8 Flash</div>
+                            <div class="model-option" data-value="agnes-3.0-flash" onclick="selectModel(this)">Agnes 3.0 Flash</div>
+                        </div>
+                    </div>
+
+                    <div class="actions">
+                        <button class="add-btn"><i data-lucide="plus"></i></button>
+                        <button class="send-btn" id="send-btn" onclick="sendMessage()"><i data-lucide="arrow-up"></i></button>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        lucide.createIcons();
+        
+        const API_URL = "http://127.0.0.1:8080"; 
+        let currentSessionId = "nova_" + Date.now();
+        let selectedModel = "deepseek-v4.1-flash";
+
+        const textarea = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const centerLogo = document.getElementById('center-logo');
+        const chatContainer = document.getElementById('chat-container');
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebar-overlay');
+
+        function toggleSidebar() {
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('open');
+        }
+
+        function toggleModelDropdown(e) {
+            e.stopPropagation();
+            document.getElementById('model-trigger').classList.toggle('open');
+            document.getElementById('model-dropdown').classList.toggle('open');
+        }
+
+        function selectModel(element) {
+            document.querySelectorAll('.model-option').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+            selectedModel = element.getAttribute('data-value');
+            document.getElementById('current-model-text').textContent = element.textContent;
+            document.getElementById('model-trigger').classList.remove('open');
+            document.getElementById('model-dropdown').classList.remove('open');
+        }
+
+        document.addEventListener('click', () => {
+            document.getElementById('model-trigger').classList.remove('open');
+            document.getElementById('model-dropdown').classList.remove('open');
+        });
+
+        textarea.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+            if(this.value.trim().length > 0) {
+                sendBtn.classList.add('active');
+                centerLogo.style.opacity = '0';
+            } else {
+                sendBtn.classList.remove('active');
+                if(chatContainer.children.length === 0) centerLogo.style.opacity = '1';
+            }
+        });
+
+        textarea.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if(this.value.trim().length > 0) sendMessage();
+            }
+        });
+
+        // --- FETCH DATA (USAGE + SESSIONS) ---
+        async function loadData() {
+            try {
+                // Sessões
+                const resSessions = await fetch(`${API_URL}/sessions`);
+                const dataSessions = await resSessions.json();
+                const list = document.getElementById('chat-list');
+                list.innerHTML = "";
+                dataSessions.sessions.forEach(s => {
+                    const li = document.createElement('li');
+                    li.textContent = s.length > 15 ? s.substring(0,15)+"..." : s; 
+                    li.onclick = () => loadHistory(s);
+                    list.appendChild(li);
+                });
+
+                // Usage (do JSON do Termux)
+                const resUsage = await fetch(`${API_URL}/usage`);
+                const dataUsage = await resUsage.json();
+                const tokens = dataUsage.tokens || 0;
+                
+                // Formata o número (ex: 1200 -> 1.2k)
+                let formattedTokens = tokens;
+                if(tokens >= 1000) formattedTokens = (tokens/1000).toFixed(1) + "k";
+                
+                document.getElementById('usage-display').textContent = `${formattedTokens} / 50k`;
+                document.getElementById('sidebar-usage').textContent = `${formattedTokens} tokens`;
+
+            } catch(e) { console.log("Servidor Termux offline."); }
+        }
+
+        async function loadHistory(sessionId) {
+            currentSessionId = sessionId;
+            document.getElementById('chat-title').textContent = sessionId;
+            chatContainer.innerHTML = "";
+            centerLogo.style.opacity = '0';
+            toggleSidebar();
+            
+            const res = await fetch(`${API_URL}/history/${sessionId}`);
+            const data = await res.json();
+            
+            data.messages.forEach(msg => {
+                if (msg.role === "user" || msg.role === "assistant") {
+                    addMessage(msg.content, msg.role === "user" ? "user" : "bot");
+                }
+            });
+        }
+
+        function newChat() {
+            currentSessionId = "nova_" + Date.now();
+            chatContainer.innerHTML = "";
+            document.getElementById('chat-title').textContent = "New chat";
+            centerLogo.style.opacity = '1';
+            toggleSidebar();
+        }
+
+        async function sendMessage() {
+            const text = textarea.value.trim();
+            if (!text) return;
+
+            addMessage(text, 'user');
+            textarea.value = '';
+            textarea.style.height = 'auto';
+            sendBtn.classList.remove('active');
+            centerLogo.style.opacity = '0';
+
+            const loadingId = addMessage("⏳ Pensando...", 'bot');
+
+            try {
+                const response = await fetch(`${API_URL}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: text, model: selectedModel, session_id: currentSessionId })
+                });
+                const data = await response.json();
+                updateMessage(loadingId, data.reply);
+                loadData(); // Puxa o usage atualizado logo após a resposta!
+            } catch (error) {
+                updateMessage(loadingId, "❌ ERRO: O servidor no Termux não está a correr.");
+            }
+        }
+
+        function addMessage(text, sender) {
+            const div = document.createElement('div');
+            div.className = `message ${sender}`;
+            div.innerHTML = text.replace(/\n/g, '<br>');
+            div.id = 'msg-' + Date.now() + Math.random();
+            chatContainer.appendChild(div);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            return div.id;
+        }
+
+        function updateMessage(id, newText) {
+            const div = document.getElementById(id);
+            let formatted = newText.replace(/```(.*?)```/gs, '<pre><code>$1</code></pre>');
+            formatted = formatted.replace(/\n/g, '<br>');
+            div.innerHTML = formatted;
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        loadData();
+        setInterval(loadData, 5000); // Atualiza a cada 5 segundos
+    </script>
+</body>
+</html>
