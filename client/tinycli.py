@@ -8,6 +8,7 @@ from rich.markdown import Markdown
 from rich.table import Table
 from rich.live import Live
 from rich.syntax import Syntax
+import pyfiglet
 
 console = Console()
 custom_style = Style([
@@ -20,21 +21,69 @@ SERVER_URL = os.environ.get("TINY_SERVER_URL", "https://tinycli.onrender.com")
 TRUST_FILE = os.path.expanduser("~/.tinycli_trust")
 USAGE_FILE = os.path.expanduser("~/.local/share/.tinycli_usage.json")
 SESSIONS_DIR = os.path.expanduser("~/.local/share/.tinycli_sessions")
+TERMOS_FILE = os.path.expanduser("~/.local/share/.tinycli_terms.json")
 
 MODELOS_DISPONIVEIS = [
-    "agnes-3.0-flash",     # VyceAI
-    "deepseek-v4-flash",   # VyceAI
-    "deepseek-v4.1",       # VyceAI
-    "gemini-3.8-flash",    # BeatAPI
-    "jev-1.13"             # BeatAPI
+    "agnes-3.0-flash", "deepseek-v4-flash", "deepseek-v4.1",
+    "gemini-3.8-flash", "jev-1.13"
 ]
 MODELO_ATUAL = MODELOS_DISPONIVEIS[0]
 LIMITE_SEMANAL = 50000
 
+# --- SISTEMA DE BAN ---
+COMANDOS_PROIBIDOS = [
+    "rm -rf", "rm -r /", "reboot", "shutdown", "mkfs", "dd if=",
+    "flash", "fastboot", "wipe", "format", "chmod -R 777", "chown -R"
+]
+
+def verificar_comando_perigoso(cmd):
+    cmd_lower = cmd.lower()
+    return any(proibido in cmd_lower for proibido in COMANDOS_PROIBIDOS)
+
+def mostrar_ban_aviso():
+    texto_ban = (
+        "[bold red]⚠️  VIOLAÇÃO DOS TERMOS DE SERVIÇO DETECTADA ⚠️[/bold red]\n\n"
+        "[bold white]You violated the client's rules and terms of service.[/bold white]\n"
+        "[bold white]We detected suspicious activity on your device.[/bold white]\n\n"
+        "[bold red]YOU WILL LOSE EVERYTHING.[/bold red]\n\n"
+        "[bold yellow]Change your behavior now.[/bold yellow]"
+    )
+    console.print(Panel(texto_ban, border_style="red", title="[bold red]🚫 SISTEMA DE BAN[/bold red]"))
+
+# --- TERMOS DE SERVIÇO ---
+def aceitar_termos():
+    limpar_tela()
+    console.print(Panel(
+        "[bold green]🦁 Bem-vindo ao Tiny Cloud CLI[/bold green]\n\n"
+        "[b]1. Uso:[/b] Agente de programação. A responsabilidade do código é tua.\n"
+        "[b]2. Privacidade:[/b] Envias mensagens para o Render. Histórico é local.\n"
+        "[b]3. Banimento:[/b] Comandos perigosos serão bloqueados.\n"
+        "[b]4. Créditos:[/b] Uso sujeito a limites semanais.",
+        title="[bold yellow]📜 Termos de Serviço[/bold yellow]", border_style="yellow"
+    ))
+    
+    escolha = questionary.select(
+        "Aceitas os termos?",
+        choices=["1. Aceitar e continuar", "2. Ler Privacidade", "3. Não aceitar"],
+        style=custom_style
+    ).ask()
+    
+    if escolha == "2. Ler Privacidade":
+        console.print(Panel(
+            "[b]Privacidade:[/b] Não guardamos conversas. API key apenas no backend.\n"
+            "Histórico em `~/.local/share/.tinycli_sessions`. Sem cookies ou venda de dados.",
+            title="🔒 Privacidade", border_style="cyan"
+        ))
+        return aceitar_termos()
+    elif escolha == "3. Não aceitar":
+        console.print("[red]❌ Termos não aceites. A encerrar...[/red]")
+        sys.exit(0)
+    return True
+
 def limpar_tela():
     os.system('clear' if os.name == 'posix' else 'cls')
 
-# --- GESTÃO DE SESSÕES ---
+# --- GESTÃO DE SESSÕES E USAGE ---
 def listar_sessoes():
     if not os.path.exists(SESSIONS_DIR): return []
     return [f.replace(".json", "") for f in os.listdir(SESSIONS_DIR) if f.endswith(".json")]
@@ -50,7 +99,6 @@ def salvar_sessao(session_id, mensagens):
     with open(os.path.join(SESSIONS_DIR, f"{session_id}.json"), "w") as f:
         json.dump(mensagens, f)
 
-# --- USAGE BLINDADO ---
 def carregar_usage():
     os.makedirs(os.path.dirname(USAGE_FILE), exist_ok=True)
     if os.path.exists(USAGE_FILE):
@@ -90,8 +138,7 @@ def pedir_permissao(caminho):
 # --- COMUNICAÇÃO ---
 def chamar_ia(mensagens):
     global USAGE_DATA, MODELO_ATUAL
-    USAGE_DATA["requests"] = USAGE_DATA.get("requests", 0) + 1
-    
+    USAGE_DATA["requests"] += 1
     api_url = f"{SERVER_URL}/api/chat"
     data = {"messages": mensagens, "model": MODELO_ATUAL}
     
@@ -99,11 +146,9 @@ def chamar_ia(mensagens):
         req = urllib.request.Request(api_url, data=json.dumps(data).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST")
         with urllib.request.urlopen(req) as response:
             dados = json.loads(response.read().decode("utf-8"))
-            
             tokens = dados.get("usage", {}).get("total_tokens", 0)
-            USAGE_DATA["tokens_usados"] = USAGE_DATA.get("tokens_usados", 0) + tokens
+            USAGE_DATA["tokens_usados"] += tokens
             salvar_usage(USAGE_DATA)
-            
             MODELO_ATUAL = dados.get("modelo_usado", MODELO_ATUAL)
             return dados["choices"][0]["message"]["content"]
     except urllib.error.HTTPError as e:
@@ -114,8 +159,8 @@ def chamar_ia(mensagens):
 def compactar_historico(mensagens):
     if len(mensagens) < 3: return mensagens
     console.print("[dim]⏳ Compactando histórico...[/dim]")
-    prompt_resumo = [{"role": "system", "content": "Resuma a conversa abaixo mantendo objetivos e ficheiros citados."}, {"role": "user", "content": json.dumps(mensagens)}]
-    resumo = chamar_ia(prompt_resumo)
+    prompt = [{"role": "system", "content": "Resuma a conversa mantendo objetivos e ficheiros."}, {"role": "user", "content": json.dumps(mensagens)}]
+    resumo = chamar_ia(prompt)
     if resumo.startswith("ERRO"): return mensagens
     return [{"role": "system", "content": f"Resumo: {resumo}"}, mensagens[-1]]
 
@@ -134,18 +179,19 @@ def executar_ferramenta(resposta):
                 alvo = os.path.dirname(os.path.abspath(acao.get("path", ""))) or os.getcwd()
             
             if not pedir_permissao(alvo): return "Cancelado."
-
             limpar_tela()
             
             if ferramenta == "run_command":
                 cmd = acao.get("command")
+                if verificar_comando_perigoso(cmd):
+                    mostrar_ban_aviso()
+                    return "ACÇÃO BLOQUEADA: VIOLAÇÃO DOS TERMOS DE SERVIÇO."
                 console.print(Panel(f"[bold yellow]⚙️ Executando:[/bold yellow] {cmd}", border_style="yellow"))
                 res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-                return (res.stdout + res.stderr) or "Comando executado com sucesso."
+                return (res.stdout + res.stderr) or "Comando executado."
                 
             elif ferramenta == "create_file":
-                path = acao.get("path")
-                content = acao.get("content")
+                path, content = acao.get("path"), acao.get("content")
                 console.print(Panel(f"[bold cyan]📝 Criando arquivo:[/bold cyan] {path}", border_style="cyan"))
                 syntax = Syntax(content, "python", theme="monokai", line_numbers=False)
                 with Live(syntax, refresh_per_second=10, console=console):
@@ -179,20 +225,15 @@ def mostrar_help():
 def mostrar_usage():
     usados = USAGE_DATA.get("tokens_usados", 0)
     restantes = max(0, LIMITE_SEMANAL - usados)
-    
-    percentagem_real = (usados / LIMITE_SEMANAL) * 100
-    percentagem_visual = min(100, percentagem_real) # Trava a barra nos 100%
-    
-    blocos = int((percentagem_visual / 100) * 20)
-    barra = "█" * blocos + "░" * (20 - blocos)
-    
-    # Cores dinâmicas (Verde, Amarelo, Vermelho)
-    cor = "green" if percentagem_real < 50 else "yellow" if percentagem_real < 80 else "red"
+    percent = (usados / LIMITE_SEMANAL) * 100
+    visual = min(100, percent)
+    barra = "█" * int((visual / 100) * 20) + "░" * (20 - int((visual / 100) * 20))
+    cor = "green" if percent < 50 else "yellow" if percent < 80 else "red"
     
     console.print(Panel(
-        f"[bold green]Modelo Atual:[/bold green] {MODELO_ATUAL}\n"
-        f"[bold]Tokens usados:[/bold] {usados} / {LIMITE_SEMANAL}\n"
-        f"[{cor}]{barra}[/{cor}] {percentagem_real:.1f}%\n"
+        f"[bold green]Modelo:[/bold green] {MODELO_ATUAL}\n"
+        f"[bold]Tokens:[/bold] {usados} / {LIMITE_SEMANAL}\n"
+        f"[{cor}]{barra}[/{cor}] {percent:.1f}%\n"
         f"[bold yellow]Restantes:[/bold yellow] {restantes}\n"
         f"[dim]Requests: {USAGE_DATA.get('requests', 0)}[/dim]",
         title="📊 Usage", border_style="blue"
@@ -202,9 +243,7 @@ def menu_sessoes(sessao_atual, mensagens_atuais):
     sessoes = listar_sessoes()
     opcoes = ["Nova Sessão"] + [f"Carregar: {s}" for s in sessoes]
     escolha = questionary.select("Gerenciar Sessões:", choices=opcoes, style=custom_style).ask()
-    
-    if escolha == "Nova Sessão":
-        return str(uuid.uuid4())[:8], []
+    if escolha == "Nova Sessão": return str(uuid.uuid4())[:8], []
     elif escolha and escolha.startswith("Carregar:"):
         sid = escolha.replace("Carregar: ", "")
         msgs = carregar_sessao(sid)
@@ -216,24 +255,42 @@ def menu_models():
     escolha = questionary.select("Escolha o modelo:", choices=MODELOS_DISPONIVEIS, style=custom_style, default=MODELO_ATUAL).ask()
     if escolha:
         MODELO_ATUAL = escolha
-        console.print(f"[green]✅ Modelo selecionado: {MODELO_ATUAL}[/green]")
+        console.print(f"[green]✅ Modelo: {MODELO_ATUAL}[/green]")
+
+def gerar_banner():
+    try:
+        return pyfiglet.figlet_format("TINY CLI", font="doom")
+    except:
+        return "TINY CLI"
 
 # --- LOOP PRINCIPAL ---
 def main():
     global MODELO_ATUAL
     limpar_tela()
-    console.print(Panel("[bold green]🦁 Tiny Cloud CLI v4.1[/bold green]\nDigita [bold cyan]/help[/bold cyan] para começar.", border_style="green"))
+    
+    os.makedirs(os.path.dirname(TERMOS_FILE), exist_ok=True)
+    if not os.path.exists(TERMOS_FILE):
+        if aceitar_termos():
+            with open(TERMOS_FILE, "w") as f: json.dump({"aceite": True}, f)
+            limpar_tela()
+    
+    banner_art = gerar_banner()
+    console.print(Panel(f"[bold green]{banner_art}[/bold green]\n[dim]v4.5 - Cloud Agent[/dim]\n\nDigita [bold cyan]/help[/bold cyan] para começar.", border_style="green", title="🦁 Tiny Cloud CLI", subtitle="Benchmarks are honest"))
     
     session_id = str(uuid.uuid4())[:8]
     try:
-        with open(os.path.expanduser("~/.tinycli_skill.md"), "r", encoding="utf-8") as f: skill = f.read()
-    except: skill = "Você é o Tiny CLI."
+        with open(os.path.expanduser("~/.tinycli/SKILLS.md"), "r", encoding="utf-8") as f: skill = f.read()
+    except:
+        try:
+            with open(os.path.expanduser("~/.tinycli_skill.md"), "r", encoding="utf-8") as f: skill = f.read()
+        except:
+            skill = "Você é o Tiny CLI."
     mensagens = [{"role": "system", "content": skill}]
     
     if os.getcwd() not in DIRETORIOS_CONFIAVEIS:
         pedir_permissao(os.getcwd())
         limpar_tela()
-        console.print(Panel("[bold green]🦁 Tiny Cloud CLI v4.1[/bold green]\nDigita [bold cyan]/help[/bold cyan] para começar.", border_style="green"))
+        console.print(Panel(f"[bold green]{banner_art}[/bold green]\n[dim]v4.5 - Cloud Agent[/dim]\n\nDigita [bold cyan]/help[/bold cyan] para começar.", border_style="green", title="🦁 Tiny Cloud CLI", subtitle="Benchmarks are honest"))
     
     while True:
         try:
@@ -260,9 +317,7 @@ def main():
             elif not prompt.strip(): continue
             
             mensagens.append({"role": "user", "content": prompt})
-            
-            with console.status("[dim]Pensando...[/dim]", spinner="dots"):
-                pass
+            with console.status("[dim]Pensando...[/dim]", spinner="dots"): pass
             
             while True:
                 resposta = chamar_ia(mensagens)
