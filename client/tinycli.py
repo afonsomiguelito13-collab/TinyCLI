@@ -29,6 +29,7 @@ MODELOS_DISPONIVEIS = [
 ]
 MODELO_ATUAL = MODELOS_DISPONIVEIS[0]
 LIMITE_SEMANAL = 50000
+TEMA_ATUAL = "dark" # "dark" ou "light"
 
 # --- SISTEMA DE BAN ---
 COMANDOS_PROIBIDOS = [
@@ -219,6 +220,7 @@ def mostrar_help():
     table.add_row("/usage", "Mostra a cota")
     table.add_row("/session", "Gerencia sessões")
     table.add_row("/compact", "Resume a conversa")
+    table.add_row("/theme", "Muda o tema (dark/light)")
     table.add_row("/clear", "Limpa o terminal")
     console.print(table)
 
@@ -257,15 +259,27 @@ def menu_models():
         MODELO_ATUAL = escolha
         console.print(f"[green]✅ Modelo: {MODELO_ATUAL}[/green]")
 
+def menu_theme():
+    global TEMA_ATUAL
+    escolha = questionary.select("Escolha o tema:", choices=["dark", "light"], style=custom_style, default=TEMA_ATUAL).ask()
+    if escolha:
+        TEMA_ATUAL = escolha
+        console.print(f"[green]✅ Tema: {TEMA_ATUAL}[/green]")
+
 def gerar_banner():
     try:
-        return pyfiglet.figlet_format("TINY CLI", font="doom")
+        return pyfiglet.figlet_format("TINY CLI", font="slant")
     except:
         return "TINY CLI"
 
+# --- BARRA DE STATUS (Inspirada no Codex/OpenCode) ---
+def barra_status(session_id):
+    status = f"[dim]Modelo: [bold]{MODELO_ATUAL}[/bold] | Sessão: {session_id} | Tema: {TEMA_ATUAL} | Tokens: {USAGE_DATA.get('tokens_usados', 0)}/{LIMITE_SEMANAL}[/dim]"
+    console.print(Panel(status, border_style="dim", padding=(0, 1)))
+
 # --- LOOP PRINCIPAL ---
 def main():
-    global MODELO_ATUAL
+    global MODELO_ATUAL, TEMA_ATUAL
     limpar_tela()
     
     os.makedirs(os.path.dirname(TERMOS_FILE), exist_ok=True)
@@ -275,7 +289,7 @@ def main():
             limpar_tela()
     
     banner_art = gerar_banner()
-    console.print(Panel(f"[bold green]{banner_art}[/bold green]\n[dim]v4.5 - Cloud Agent[/dim]\n\nDigita [bold cyan]/help[/bold cyan] para começar.", border_style="green", title="🦁 Tiny Cloud CLI", subtitle="Benchmarks are honest"))
+    console.print(Panel(f"[bold green]{banner_art}[/bold green]\n[dim]v5.0 - UI Inspirada no Codex/OpenCode[/dim]\n\nDigita [bold cyan]/help[/bold cyan] para começar.", border_style="green", title="🦁 Tiny Cloud CLI", subtitle="Benchmarks are honest"))
     
     session_id = str(uuid.uuid4())[:8]
     try:
@@ -290,16 +304,18 @@ def main():
     if os.getcwd() not in DIRETORIOS_CONFIAVEIS:
         pedir_permissao(os.getcwd())
         limpar_tela()
-        console.print(Panel(f"[bold green]{banner_art}[/bold green]\n[dim]v4.5 - Cloud Agent[/dim]\n\nDigita [bold cyan]/help[/bold cyan] para começar.", border_style="green", title="🦁 Tiny Cloud CLI", subtitle="Benchmarks are honest"))
+        console.print(Panel(f"[bold green]{banner_art}[/bold green]\n[dim]v5.0 - UI Inspirada no Codex/OpenCode[/dim]\n\nDigita [bold cyan]/help[/bold cyan] para começar.", border_style="green", title="🦁 Tiny Cloud CLI", subtitle="Benchmarks are honest"))
     
     while True:
         try:
-            prompt = console.input(f"[bold blue]👤 Tu ({session_id}):[/bold blue] ")
+            barra_status(session_id)
+            prompt = console.input(f"[bold blue]👤 Tu:[/bold blue] ")
             cmd = prompt.lower().strip()
             
             if cmd in ["/help", "help"]: mostrar_help(); continue
             elif cmd == "/usage": mostrar_usage(); continue
             elif cmd == "/models": menu_models(); continue
+            elif cmd == "/theme": menu_theme(); continue
             elif cmd == "/session":
                 session_id, mensagens = menu_sessoes(session_id, mensagens)
                 salvar_sessao(session_id, mensagens)
