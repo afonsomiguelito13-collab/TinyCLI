@@ -16,6 +16,7 @@ const MODELOS = {
     "agnes-3.0-flash": { url: VYCEAI_URL, key: VYCEAI_KEY },
     "deepseek-v4-flash": { url: VYCEAI_URL, key: VYCEAI_KEY },
     "deepseek-v4.1": { url: VYCEAI_URL, key: VYCEAI_KEY },
+    "deepseek-v4.1-flash": { url: VYCEAI_URL, key: VYCEAI_KEY }, // <-- ADICIONA ESTA LINHA
     "gemini-3.8-flash": { url: BEATAPI_URL, key: BEATAPI_KEY },
     "jev-1.13": { url: BEATAPI_URL, key: BEATAPI_KEY }
 };
