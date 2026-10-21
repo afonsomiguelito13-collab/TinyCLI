@@ -20,9 +20,8 @@ custom_style = Style([
     ('highlighted', 'fg:#00ff00 bold'), ('selected', 'fg:#00ff00')
 ])
 
-# --- CONFIGURAÇÕES DE VERSÃO ---
-VERSAO_LOCAL = "11.0.0"
-INSTALL_URL = "https://raw.githubusercontent.com/afonsomiguel13-collab/TinyCLI/main/public/install.sh"
+VERSAO_LOCAL = "11.5.0"
+INSTALL_URL = "https://raw.githubusercontent.com/afonsomiguelito13-collab/TinyCLI/main/public/install.sh"
 
 SERVER_URL = os.environ.get("TINY_SERVER_URL", "https://tinycli.onrender.com")
 TRUST_FILE = os.path.expanduser("~/.tinycli_trust")
@@ -38,10 +37,12 @@ MODELOS_DISPONIVEIS = [
     "agnes-3.0-flash",
     "jev-1.13",
     "gpt-6-luna",
-    "space-bunny" # O coelho espacial
+    "space-bunny"
 ]
 MODELO_ATUAL = MODELOS_DISPONIVEIS[0]
-LIMITE_SEMANAL = 50000
+
+# --- AUMENTO DO LIMITE PARA 5M ---
+LIMITE_SEMANAL = 5000000 
 
 CUSTO_MODELO = {
     "deepseek-v4.1": 3,
@@ -50,10 +51,9 @@ CUSTO_MODELO = {
     "agnes-3.0-flash": 3,
     "jev-1.13": 1,
     "gpt-6-luna": 8,
-    "space-bunny": 1 # Grátis
+    "space-bunny": 1
 }
 
-# --- CLIENTE HTTP PROFISSIONAL ---
 http_session = requests.Session()
 retry_strategy = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504], allowed_methods=["POST", "GET"])
 adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=10, pool_maxsize=10)
@@ -63,7 +63,6 @@ http_session.mount("http://", adapter)
 def limpar_tela():
     os.system('clear' if os.name == 'posix' else 'cls')
 
-# --- AUTO UPDATER ---
 def verificar_atualizacao():
     try:
         res = http_session.get(f"{SERVER_URL}/api/version", timeout=(3, 10))
@@ -82,10 +81,8 @@ def verificar_atualizacao():
                     console.print("[green]✅ Atualização concluída! Reinicia o Tiny CLI.[/green]")
                     sys.exit(0)
     except Exception:
-        # Se o servidor estiver offline ou dormir, ignora a verificação
-        pass
+        pass # Ignora erros se o Render estiver a dormir
 
-# --- SISTEMA DE CONFIGURAÇÃO ---
 def carregar_config():
     if os.path.exists(CONFIG_FILE):
         try:
@@ -118,7 +115,6 @@ def escolher_pasta_inicial():
     salvar_config(pasta_final)
     time.sleep(1)
 
-# --- SISTEMA DE APROVAÇÃO E BAN ---
 def pedir_aprovacao_comando(cmd):
     console.print(Panel(f"[bold yellow]O Agente quer executar:[/bold yellow]\n\n[bold white]{cmd}[/bold white]", border_style="yellow", title="⚠️ APROVAÇÃO NECESSÁRIA"))
     return questionary.select("Aprovas?", choices=["Sim, executar", "Não, bloquear"], style=custom_style).ask() == "Sim, executar"
@@ -129,7 +125,6 @@ def verificar_comando_perigoso(cmd):
 def mostrar_ban_aviso():
     console.print(Panel("[bold red]⚠️ VIOLAÇÃO DOS TERMOS DE SERVIÇO DETECTADA ⚠️[/bold red]\n\n[bold white]You will lose everything.[/bold white]", border_style="red", title="🚫 BAN"))
 
-# --- FUNÇÕES DE SISTEMA (Usage, Sessoes, Termos) ---
 def aceitar_termos():
     limpar_tela()
     console.print(Panel("[bold green]🦁 Bem-vindo ao Tiny Cloud CLI[/bold green]\n\n[1] Aceitar\n[2] Privacidade\n[3] Sair", title="📜 Termos", border_style="yellow"))
@@ -184,7 +179,6 @@ def pedir_permissao(caminho):
         return True
     return False
 
-# --- COMUNICAÇÃO COM O SERVIDOR ---
 def chamar_ia(mensagens):
     global USAGE_DATA, MODELO_ATUAL
     USAGE_DATA["requests"] += 1
@@ -208,13 +202,16 @@ def chamar_ia(mensagens):
         return dados["choices"][0]["message"]["content"]
         
     except requests.exceptions.Timeout:
-        return "ERRO DE TIMEOUT: O servidor demorou muito a responder (Render a dormir?)."
+        return "ERRO DE TIMEOUT: O servidor demorou muito (Render a dormir?)."
     except requests.exceptions.ConnectionError:
         return "ERRO DE CONEXÃO: Verifica a internet ou se o Render está online."
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            return "ERRO 404: Rota não encontrada. O servidor no Render pode estar com o código antigo. Faz deploy do server.js novo."
+        return f"ERRO HTTP ({e.response.status_code}): {e.response.reason}"
     except Exception as e:
         return f"ERRO: {e}"
 
-# --- EXECUÇÃO DE FERRAMENTAS ---
 def executar_ferramenta(resposta):
     try:
         pensamento = ""
@@ -300,9 +297,18 @@ def mostrar_usage():
     restantes = max(0, LIMITE_SEMANAL - usados)
     percent = (usados / LIMITE_SEMANAL) * 100
     visual = min(100, percent)
-    barra = "█" * int((visual / 100) * 20) + "░" * (20 - int((visual / 100) * 20))
+    blocos = int((visual / 100) * 20)
+    barra = "█" * blocos + "░" * (20 - blocos)
     cor = "green" if percent < 50 else "yellow" if percent < 80 else "red"
-    console.print(Panel(f"[bold green]Modelo:[/bold green] {MODELO_ATUAL}\n[bold]Tokens:[/bold] {usados}/{LIMITE_SEMANAL}\n[{cor}]{barra}[/{cor}] {percent:.1f}%\nRestantes: {restantes}", title="📊 Usage", border_style="blue"))
+    
+    console.print(Panel(
+        f"[bold green]Modelo:[/bold green] {MODELO_ATUAL}\n"
+        f"[bold]Tokens Usados:[/bold] {usados} / {LIMITE_SEMANAL}\n"
+        f"[{cor}]{barra}[/{cor}] {percent:.2f}%\n"
+        f"[bold yellow]Restantes:[/bold yellow] {restantes}", 
+        title="📊 Usage (5M)", 
+        border_style="blue"
+    ))
 
 def menu_sessoes(sessao_atual, mensagens_atuais):
     sessoes = listar_sessoes()
@@ -338,7 +344,6 @@ def main():
     global MODELO_ATUAL
     limpar_tela()
     
-    # 1. Verifica atualização antes de tudo
     verificar_atualizacao()
 
     os.makedirs(os.path.dirname(TERMOS_FILE), exist_ok=True)
