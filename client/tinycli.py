@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, sys, json, subprocess, urllib.request, urllib.error, time, uuid, re
+import os, sys, json, subprocess, urllib.error, time, uuid, re
 import questionary
 from questionary import Style
 from rich.console import Console
@@ -9,6 +9,9 @@ from rich.table import Table
 from rich.live import Live
 from rich.syntax import Syntax
 import pyfiglet
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 console = Console()
 custom_style = Style([
@@ -35,7 +38,7 @@ MODELOS_DISPONIVEIS = [
 MODELO_ATUAL = MODELOS_DISPONIVEIS[0]
 LIMITE_SEMANAL = 50000
 
-# --- A TABELA DE CUSTOS DO IMPÉRIO ---
+# --- TABELA DE CUSTOS ---
 CUSTO_MODELO = {
     "deepseek-v4.1": 3,
     "deepseek-v4.1-flash": 3,
@@ -44,6 +47,25 @@ CUSTO_MODELO = {
     "jev-1.13": 1,
     "gpt-6-luna": 8
 }
+
+# --- CONFIGURAÇÃO PROFISSIONAL DO REQUESTS (Session + Retry + Pool) ---
+# Baseado nas melhores práticas de produção
+http_session = requests.Session()
+
+# Configura o Retry para aguentar falhas de rede e erros 5xx do Render
+retry_strategy = Retry(
+    total=3, # Tenta 3 vezes
+    backoff_factor=1, # Espera 1s, 2s, 4s entre tentativas
+    status_forcelist=[429, 500, 502, 503, 504], # Erros que valem a pena tentar de novo
+    allowed_methods=["POST", "GET"]
+)
+adapter = HTTPAdapter(
+    max_retries=retry_strategy,
+    pool_connections=10, # Pool de conexões
+    pool_maxsize=10
+)
+http_session.mount("https://", adapter)
+http_session.mount("http://", adapter)
 
 COMANDOS_PROIBIDOS = ["rm -rf", "rm -r /", "reboot", "shutdown", "mkfs", "dd if=", "flash", "fastboot", "wipe", "format", "chmod -R 777", "chown -R"]
 
@@ -161,6 +183,7 @@ def pedir_permissao(caminho):
         return True
     return False
 
+# --- A NOVA FUNÇÃO DE COMUNICAÇÃO (PROFISSIONAL) ---
 def chamar_ia(mensagens):
     global USAGE_DATA, MODELO_ATUAL
     USAGE_DATA["requests"] += 1
@@ -168,30 +191,43 @@ def chamar_ia(mensagens):
     data = {"messages": mensagens, "model": MODELO_ATUAL}
     
     try:
-        req = urllib.request.Request(api_url, data=json.dumps(data).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST")
-        with urllib.request.urlopen(req) as response:
-            texto_resposta = response.read().decode("utf-8")
-            if not texto_resposta.strip():
-                return "ERRO: O servidor respondeu com um corpo vazio (Render acordou?)."
-            
-            dados = json.loads(texto_resposta)
-            
-            # A MATEMÁTICA DO IMPÉRIO
-            tokens_reais = dados.get("usage", {}).get("total_tokens", 0)
-            multiplicador = CUSTO_MODELO.get(MODELO_ATUAL, 1)
-            tokens_calculados = tokens_reais * multiplicador
-            
-            USAGE_DATA["tokens_usados"] += tokens_calculados
-            salvar_usage(USAGE_DATA)
-            MODELO_ATUAL = dados.get("modelo_usado", MODELO_ATUAL)
-            return dados["choices"][0]["message"]["content"]
-            
-    except urllib.error.HTTPError as e:
-        if e.code == 429:
+        # Usa a sessão configurada com Retry e Pool
+        response = http_session.post(
+            api_url, 
+            json=data, 
+            timeout=(5, 60) # Timeout: 5s para conectar, 60s para ler a resposta (Render pode ser lento)
+        )
+        
+        # Se o Render devolver erro (429, 500, etc)
+        if response.status_code == 429:
             return "ERRO 429: CALMA LÁ! Abusaste do rate limit. Fica 15 minutos de castigo a pensar."
-        return f"ERRO ({e.code}): {e.reason}"
+            
+        response.raise_for_status() # Lança erro se não for 200 OK
+        
+        texto_resposta = response.text
+        if not texto_resposta.strip():
+            return "ERRO: O servidor respondeu com um corpo vazio (Render acordou?)."
+        
+        dados = response.json()
+        
+        # A MATEMÁTICA DO IMPÉRIO
+        tokens_reais = dados.get("usage", {}).get("total_tokens", 0)
+        multiplicador = CUSTO_MODELO.get(MODELO_ATUAL, 1)
+        tokens_calculados = tokens_reais * multiplicador
+        
+        USAGE_DATA["tokens_usados"] += tokens_calculados
+        salvar_usage(USAGE_DATA)
+        MODELO_ATUAL = dados.get("modelo_usado", MODELO_ATUAL)
+        return dados["choices"][0]["message"]["content"]
+        
+    except requests.exceptions.Timeout:
+        return "ERRO DE TIMEOUT: O servidor demorou muito a responder (Render a dormir?). Tenta de novo."
+    except requests.exceptions.ConnectionError:
+        return "ERRO DE CONEXÃO: Verifica a tua internet ou se o Render está online."
+    except requests.exceptions.HTTPError as e:
+        return f"ERRO HTTP ({e.response.status_code}): {e.response.reason}"
     except Exception as e:
-        return f"ERRO DE CONEXÃO: {e}"
+        return f"ERRO INESPERADO: {e}"
 
 def executar_ferramenta(resposta):
     try:
@@ -324,7 +360,7 @@ def main():
     
     escolher_pasta_inicial()
     
-    console.print(Panel(f"[bold green]{gerar_banner()}[/bold green]\n[dim]v10.5 - Custos e Castigos[/dim]", border_style="green", title="🦁 Tiny Cloud CLI"))
+    console.print(Panel(f"[bold green]{gerar_banner()}[/bold green]\n[dim]v11.0 - Professional HTTP Client[/dim]", border_style="green", title="🦁 Tiny Cloud CLI"))
     
     session_id = str(uuid.uuid4())[:8]
     try:
