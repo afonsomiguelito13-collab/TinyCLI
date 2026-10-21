@@ -22,8 +22,9 @@ TRUST_FILE = os.path.expanduser("~/.tinycli_trust")
 USAGE_FILE = os.path.expanduser("~/.local/share/.tinycli_usage.json")
 SESSIONS_DIR = os.path.expanduser("~/.local/share/.tinycli_sessions")
 TERMOS_FILE = os.path.expanduser("~/.local/share/.tinycli_terms.json")
+CONFIG_FILE = os.path.expanduser("~/.local/share/.tinycli_config.json")
 
-MODELOS_DISPONIVEIS = ["deepseek-v4.1-flash", "gemini-3.8-flash", "agnes-3.0-flash"]
+MODELOS_DISPONIVEIS = ["deepseek-v4.1", "deepseek-v4.1-flash", "gemini-3.8-flash", "agnes-3.0-flash"]
 MODELO_ATUAL = MODELOS_DISPONIVEIS[0]
 LIMITE_SEMANAL = 50000
 
@@ -42,6 +43,68 @@ def mostrar_ban_aviso():
     )
     console.print(Panel(texto_ban, border_style="red", title="[bold red]🚫 SISTEMA DE BAN[/bold red]"))
 
+def limpar_tela():
+    os.system('clear' if os.name == 'posix' else 'cls')
+
+# --- SISTEMA DE CONFIGURAÇÃO (PASTA PADRÃO) ---
+def carregar_config():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                return json.load(f)
+        except: pass
+    return {"last_dir": os.getcwd()}
+
+def salvar_config(diretorio):
+    os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+    with open(CONFIG_FILE, "w") as f:
+        json.dump({"last_dir": diretorio}, f)
+
+# --- SELETOR DE PASTA INICIAL ---
+def escolher_pasta_inicial():
+    config = carregar_config()
+    pasta_padrao = config.get("last_dir", os.getcwd())
+    
+    limpar_tela()
+    console.print(Panel("[bold cyan]📁 Onde queres trabalhar hoje?[/bold cyan]", border_style="cyan"))
+    
+    opcoes = [
+        f"Usar a pasta atual: {pasta_padrao}",
+        "Escolher outra pasta (navegar)",
+        "Usar a Home (~)"
+    ]
+    
+    escolha = questionary.select("Seleciona uma opção:", choices=opcoes, style=custom_style).ask()
+    
+    if escolha == "Usar a Home (~)":
+        pasta_final = os.path.expanduser("~")
+    elif escolha == "Escolher outra pasta (navegar)":
+        # Navegador de pastas simples (pede o caminho)
+        pasta_final = questionary.path("Caminho da pasta:", default=pasta_padrao, style=custom_style).ask()
+        if not pasta_final or not os.path.isdir(pasta_final):
+            console.print("[red]Pasta inválida. A usar a atual.[/red]")
+            pasta_final = os.getcwd()
+    else:
+        pasta_final = pasta_padrao
+
+    os.chdir(pasta_final)
+    salvar_config(pasta_final)
+    console.print(f"[green]✅ A trabalhar em: {pasta_final}[/green]")
+    time.sleep(1)
+
+# --- SISTEMA DE APROVAÇÃO DE COMANDOS ---
+def pedir_aprovacao_comando(cmd):
+    console.print(Panel(f"[bold yellow]O Agente Cez quer executar o seguinte comando:[/bold yellow]\n\n[bold white]{cmd}[/bold white]", border_style="yellow", title="⚠️ APROVAÇÃO NECESSÁRIA"))
+    
+    escolha = questionary.select(
+        "Aprovas a execução deste comando?",
+        choices=["Sim, executar", "Não, bloquear"],
+        style=custom_style
+    ).ask()
+    
+    return escolha == "Sim, executar"
+
+# ... (Aceitar termos, Usage, Trust etc mantidos iguais) ...
 def aceitar_termos():
     limpar_tela()
     console.print(Panel("[bold green]🦁 Bem-vindo ao Tiny Cloud CLI[/bold green]\n\n[1] Aceitar\n[2] Privacidade\n[3] Sair", title="📜 Termos", border_style="yellow"))
@@ -51,9 +114,6 @@ def aceitar_termos():
         return aceitar_termos()
     elif escolha == "3. Não aceitar": sys.exit(0)
     return True
-
-def limpar_tela():
-    os.system('clear' if os.name == 'posix' else 'cls')
 
 def listar_sessoes():
     if not os.path.exists(SESSIONS_DIR): return []
@@ -105,82 +165,37 @@ def pedir_permissao(caminho):
         return True
     return False
 
-# --- FUNÇÃO DE STREAMING ---
-def chamar_ia_stream(mensagens):
+def chamar_ia(mensagens):
     global USAGE_DATA, MODELO_ATUAL
     USAGE_DATA["requests"] += 1
     api_url = f"{SERVER_URL}/api/chat"
-    data = json.dumps({"messages": mensagens, "model": MODELO_ATUAL}).encode("utf-8")
+    data = {"messages": mensagens, "model": MODELO_ATUAL}
     
     try:
-        req = urllib.request.Request(api_url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+        req = urllib.request.Request(api_url, data=json.dumps(data).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST")
         with urllib.request.urlopen(req) as response:
-            texto_completo = ""
-            pensamento = ""
-            
-            # Lê linha por linha do stream SSE
-            for line in response:
-                line = line.decode('utf-8').strip()
-                if not line or not line.startswith("data: "):
-                    continue
-                
-                payload = line[6:] # Remove "data: "
-                if payload == "[DONE]":
-                    break
-                
-                try:
-                    chunk = json.loads(payload)
-                    # Se a API mandar erro no chunk
-                    if "error" in chunk:
-                        return f"ERRO: {chunk['error']}", ""
-                    
-                    # Extrai o delta (pedaço de texto)
-                    delta = chunk.get("choices", [{}])[0].get("delta", {})
-                    
-                    # Tenta apanhar o "thinking" se existir (alguns modelos mandam)
-                    if "reasoning_content" in delta:
-                        pensamento += delta["reasoning_content"]
-                    
-                    conteudo = delta.get("content", "")
-                    if conteudo:
-                        texto_completo += conteudo
-                        # Imprime no terminal em tempo real (sem quebrar linha)
-                        sys.stdout.write(conteudo)
-                        sys.stdout.flush()
-                        
-                except json.JSONDecodeError:
-                    continue
-            
-            # Pula uma linha no final
-            sys.stdout.write("\n")
-            sys.stdout.flush()
-            
-            # Tenta apanhar tokens do usage se o último chunk tiver
-            # (Algumas APIs mandam no final, mas no streaming é raro)
-            
+            dados = json.loads(response.read().decode("utf-8"))
+            tokens = dados.get("usage", {}).get("total_tokens", 0)
+            USAGE_DATA["tokens_usados"] += tokens
             salvar_usage(USAGE_DATA)
-            return texto_completo, pensamento
-            
+            MODELO_ATUAL = dados.get("modelo_usado", MODELO_ATUAL)
+            return dados["choices"][0]["message"]["content"]
     except urllib.error.HTTPError as e:
-        return f"ERRO HTTP ({e.code}): {e.reason}", ""
+        return f"ERRO ({e.code}): {e.reason}"
     except Exception as e:
-        return f"ERRO DE CONEXÃO: {e}", ""
+        return f"ERRO DE CONEXÃO: {e}"
 
-# --- Execução de Ferramentas (Mantida igual) ---
 def executar_ferramenta(resposta):
     try:
-        # Extrai o Thinking se estiver no texto
         pensamento = ""
         match_think = re.search(r'<thinking>(.*?)</thinking>', resposta, re.DOTALL)
         if match_think: 
             pensamento = match_think.group(1).strip()
             resposta = resposta.replace(match_think.group(0), "")
 
-        # Limpa markdown
         if "```json" in resposta: resposta = resposta.split("```json")[1].split("```")[0]
         elif "```" in resposta: resposta = resposta.split("```")[1].split("```")[0]
         
-        # Limpa lixo XML (tool_call)
         if "<tool_call>" in resposta:
             cmd_match = re.search(r'<arg_value>(.*?)</arg_value>', resposta, re.DOTALL)
             if cmd_match:
@@ -205,10 +220,15 @@ def executar_ferramenta(resposta):
 
             if ferramenta == "run_command":
                 cmd = acao.get("command")
+                
+                # --- VERIFICAÇÃO DE BAN E APROVAÇÃO ---
                 if verificar_comando_perigoso(cmd):
                     mostrar_ban_aviso()
-                    return "ACÇÃO BLOQUEADA.", False, pensamento
+                    return "ACÇÃO BLOQUEADA PELO SISTEMA DE BAN.", False, pensamento
                 
+                if not pedir_aprovacao_comando(cmd):
+                    return "O utilizador NEGOU a execução do comando.", False, pensamento
+
                 with console.status(f"[bold yellow]⚙️ Executando:[/bold yellow] {cmd}", spinner="dots"):
                     res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
                 
@@ -231,6 +251,11 @@ def executar_ferramenta(resposta):
 
             elif ferramenta == "run_code":
                 code = acao.get("code")
+                console.print(Panel(f"[bold yellow]🐍 O Agente quer executar Python:[/bold yellow]\n{code}", border_style="yellow"))
+                
+                if not questionary.confirm("Aprovas a execução deste código?").ask():
+                    return "O utilizador NEGOU a execução do código.", False, pensamento
+                    
                 with console.status("[bold yellow]🐍 Executando Python...[/bold yellow]", spinner="dots"):
                     res = subprocess.run(["python3", "-c", code], capture_output=True, text=True)
                 saida = (res.stdout + res.stderr).strip()
@@ -241,7 +266,6 @@ def executar_ferramenta(resposta):
     except json.JSONDecodeError:
         return None, False, ""
 
-# --- Menus e UI (Mantidos) ---
 def mostrar_help():
     table = Table(title="🦁 Tiny CLI - Comandos", show_header=True, header_style="bold green")
     table.add_column("Comando", style="cyan", width=15)
@@ -284,7 +308,7 @@ def gerar_banner():
     except: return "TINY CLI"
 
 def barra_status(session_id):
-    status = f"[dim]Modelo: [bold]{MODELO_ATUAL}[/bold] | Sessão: {session_id} | Tokens: {USAGE_DATA.get('tokens_usados', 0)}/{LIMITE_SEMANAL}[/dim]"
+    status = f"[dim]Modelo: [bold]{MODELO_ATUAL}[/bold] | Sessão: {session_id} | Tokens: {USAGE_DATA.get('tokens_usados', 0)}/{LIMITE_SEMANAL} | Local: {os.getcwd()}[/dim]"
     console.print(Panel(status, border_style="dim", padding=(0, 1)))
 
 def main():
@@ -296,17 +320,16 @@ def main():
             with open(TERMOS_FILE, "w") as f: json.dump({"aceite": True}, f)
             limpar_tela()
     
-    console.print(Panel(f"[bold green]{gerar_banner()}[/bold green]\n[dim]v9.0 - Real Streaming[/dim]", border_style="green", title="🦁 Tiny Cloud CLI"))
+    # Escolher a pasta de trabalho antes de abrir o CLI
+    escolher_pasta_inicial()
+    
+    console.print(Panel(f"[bold green]{gerar_banner()}[/bold green]\n[dim]v9.5 - Human-in-the-loop[/dim]", border_style="green", title="🦁 Tiny Cloud CLI"))
     
     session_id = str(uuid.uuid4())[:8]
     try:
         with open(os.path.expanduser("~/.tinycli/SKILLS.md"), "r", encoding="utf-8") as f: skill = f.read()
     except: skill = "Você é o Tiny CLI."
     mensagens = [{"role": "system", "content": skill}]
-    
-    if os.getcwd() not in DIRETORIOS_CONFIAVEIS:
-        pedir_permissao(os.getcwd())
-        limpar_tela()
     
     while True:
         try:
@@ -321,7 +344,7 @@ def main():
             elif cmd == "/session":
                 session_id, mensagens = menu_sessoes(session_id, mensagens)
                 salvar_sessao(session_id, mensagens); limpar_tela(); continue
-            elif cmd == "/compact": continue # Simplificado
+            elif cmd == "/compact": continue 
             elif cmd == "/clear": limpar_tela(); continue
             elif cmd in ["sair", "exit"]: break
             elif not prompt.strip(): continue
@@ -330,13 +353,11 @@ def main():
             
             tentativas = 0
             while tentativas < 5:
-                # AQUI É O STREAMING REAL
-                console.print(f"[dim]🤖 Tiny ({MODELO_ATUAL}):[/dim]")
-                texto_final, pensamento = chamar_ia_stream(mensagens)
+                with console.status(f"[bold cyan]⏳ Pensando...[/bold cyan]", spinner="bouncingBar"):
+                    resposta = chamar_ia(mensagens)
+                mensagens.append({"role": "assistant", "content": resposta})
                 
-                mensagens.append({"role": "assistant", "content": texto_final})
-                
-                resultado, deu_erro, think_exec = executar_ferramenta(texto_final)
+                resultado, deu_erro, pensamento = executar_ferramenta(resposta)
                 
                 if resultado:
                     if deu_erro:
@@ -350,7 +371,7 @@ def main():
                         continue
                 else:
                     limpar_tela()
-                    console.print(Panel(Markdown(texto_final), title=f"🤖 Tiny ({MODELO_ATUAL})", border_style="green"))
+                    console.print(Panel(Markdown(resposta), title=f"🤖 Tiny ({MODELO_ATUAL})", border_style="green"))
                     break
             salvar_sessao(session_id, mensagens)
         except KeyboardInterrupt:
