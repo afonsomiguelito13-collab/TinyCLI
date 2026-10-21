@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, sys, json, subprocess, urllib.error, time, uuid, re
+import os, sys, json, subprocess, time, uuid, re
 import questionary
 from questionary import Style
 from rich.console import Console
@@ -20,6 +20,10 @@ custom_style = Style([
     ('highlighted', 'fg:#00ff00 bold'), ('selected', 'fg:#00ff00')
 ])
 
+# --- CONFIGURAÇÕES DE VERSÃO ---
+VERSAO_LOCAL = "11.0.0"
+INSTALL_URL = "https://raw.githubusercontent.com/afonsomiguel13-collab/TinyCLI/main/public/install.sh"
+
 SERVER_URL = os.environ.get("TINY_SERVER_URL", "https://tinycli.onrender.com")
 TRUST_FILE = os.path.expanduser("~/.tinycli_trust")
 USAGE_FILE = os.path.expanduser("~/.local/share/.tinycli_usage.json")
@@ -33,58 +37,55 @@ MODELOS_DISPONIVEIS = [
     "gemini-3.8-flash", 
     "agnes-3.0-flash",
     "jev-1.13",
-    "gpt-6-luna"
+    "gpt-6-luna",
+    "space-bunny" # O coelho espacial
 ]
 MODELO_ATUAL = MODELOS_DISPONIVEIS[0]
 LIMITE_SEMANAL = 50000
 
-# --- TABELA DE CUSTOS ---
 CUSTO_MODELO = {
     "deepseek-v4.1": 3,
     "deepseek-v4.1-flash": 3,
     "gemini-3.8-flash": 4,
     "agnes-3.0-flash": 3,
     "jev-1.13": 1,
-    "gpt-6-luna": 8
+    "gpt-6-luna": 8,
+    "space-bunny": 1 # Grátis
 }
 
-# --- CONFIGURAÇÃO PROFISSIONAL DO REQUESTS (Session + Retry + Pool) ---
-# Baseado nas melhores práticas de produção
+# --- CLIENTE HTTP PROFISSIONAL ---
 http_session = requests.Session()
-
-# Configura o Retry para aguentar falhas de rede e erros 5xx do Render
-retry_strategy = Retry(
-    total=3, # Tenta 3 vezes
-    backoff_factor=1, # Espera 1s, 2s, 4s entre tentativas
-    status_forcelist=[429, 500, 502, 503, 504], # Erros que valem a pena tentar de novo
-    allowed_methods=["POST", "GET"]
-)
-adapter = HTTPAdapter(
-    max_retries=retry_strategy,
-    pool_connections=10, # Pool de conexões
-    pool_maxsize=10
-)
+retry_strategy = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504], allowed_methods=["POST", "GET"])
+adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=10, pool_maxsize=10)
 http_session.mount("https://", adapter)
 http_session.mount("http://", adapter)
-
-COMANDOS_PROIBIDOS = ["rm -rf", "rm -r /", "reboot", "shutdown", "mkfs", "dd if=", "flash", "fastboot", "wipe", "format", "chmod -R 777", "chown -R"]
-
-def verificar_comando_perigoso(cmd):
-    return any(proibido in cmd.lower() for proibido in COMANDOS_PROIBIDOS)
-
-def mostrar_ban_aviso():
-    texto_ban = (
-        "[bold red]⚠️  VIOLAÇÃO DOS TERMOS DE SERVIÇO DETECTADA ⚠️[/bold red]\n\n"
-        "[bold white]You violated the client's rules and terms of service.[/bold white]\n"
-        "[bold white]We detected suspicious activity on your device.[/bold white]\n\n"
-        "[bold red]YOU WILL LOSE EVERYTHING.[/bold red]\n\n"
-        "[bold yellow]Change your behavior now.[/bold yellow]"
-    )
-    console.print(Panel(texto_ban, border_style="red", title="[bold red]🚫 SISTEMA DE BAN[/bold red]"))
 
 def limpar_tela():
     os.system('clear' if os.name == 'posix' else 'cls')
 
+# --- AUTO UPDATER ---
+def verificar_atualizacao():
+    try:
+        res = http_session.get(f"{SERVER_URL}/api/version", timeout=(3, 10))
+        if res.status_code == 200:
+            versao_servidor = res.json().get("version", VERSAO_LOCAL)
+            if versao_servidor != VERSAO_LOCAL:
+                console.print(Panel(
+                    f"[bold yellow]🚀 Nova Atualização Disponível![/bold yellow]\n"
+                    f"Versão Local: {VERSAO_LOCAL} | Nova Versão: {versao_servidor}\n\n"
+                    f"Queres atualizar agora?",
+                    border_style="yellow"
+                ))
+                if questionary.confirm("Atualizar?").ask():
+                    console.print("[cyan]A baixar a atualização...[/cyan]")
+                    subprocess.run(f"curl -sL {INSTALL_URL} | bash", shell=True)
+                    console.print("[green]✅ Atualização concluída! Reinicia o Tiny CLI.[/green]")
+                    sys.exit(0)
+    except Exception:
+        # Se o servidor estiver offline ou dormir, ignora a verificação
+        pass
+
+# --- SISTEMA DE CONFIGURAÇÃO ---
 def carregar_config():
     if os.path.exists(CONFIG_FILE):
         try:
@@ -110,25 +111,31 @@ def escolher_pasta_inicial():
     elif escolha == "Escolher outra pasta (navegar)":
         pasta_final = questionary.path("Caminho da pasta:", default=pasta_padrao, style=custom_style).ask()
         if not pasta_final or not os.path.isdir(pasta_final):
-            console.print("[red]Pasta inválida. A usar a atual.[/red]")
             pasta_final = os.getcwd()
     else: pasta_final = pasta_padrao
 
     os.chdir(pasta_final)
     salvar_config(pasta_final)
-    console.print(f"[green]✅ A trabalhar em: {pasta_final}[/green]")
     time.sleep(1)
 
+# --- SISTEMA DE APROVAÇÃO E BAN ---
 def pedir_aprovacao_comando(cmd):
     console.print(Panel(f"[bold yellow]O Agente quer executar:[/bold yellow]\n\n[bold white]{cmd}[/bold white]", border_style="yellow", title="⚠️ APROVAÇÃO NECESSÁRIA"))
     return questionary.select("Aprovas?", choices=["Sim, executar", "Não, bloquear"], style=custom_style).ask() == "Sim, executar"
 
+def verificar_comando_perigoso(cmd):
+    return any(p in cmd.lower() for p in ["rm -rf", "reboot", "mkfs", "dd if=", "flash"])
+
+def mostrar_ban_aviso():
+    console.print(Panel("[bold red]⚠️ VIOLAÇÃO DOS TERMOS DE SERVIÇO DETECTADA ⚠️[/bold red]\n\n[bold white]You will lose everything.[/bold white]", border_style="red", title="🚫 BAN"))
+
+# --- FUNÇÕES DE SISTEMA (Usage, Sessoes, Termos) ---
 def aceitar_termos():
     limpar_tela()
     console.print(Panel("[bold green]🦁 Bem-vindo ao Tiny Cloud CLI[/bold green]\n\n[1] Aceitar\n[2] Privacidade\n[3] Sair", title="📜 Termos", border_style="yellow"))
     escolha = questionary.select("Aceitas os termos?", choices=["1. Aceitar", "2. Privacidade", "3. Não aceitar"], style=custom_style).ask()
     if escolha == "2. Privacidade":
-        console.print(Panel("Não guardamos conversas. API key no backend.", title="🔒 Privacidade", border_style="cyan"))
+        console.print(Panel("Não guardamos conversas.", title="🔒 Privacidade", border_style="cyan"))
         return aceitar_termos()
     elif escolha == "3. Não aceitar": sys.exit(0)
     return True
@@ -165,25 +172,19 @@ def salvar_usage(data):
     with open(USAGE_FILE, "w") as f: json.dump(data, f)
 
 USAGE_DATA = carregar_usage()
-
-def carregar_confiaveis():
-    if os.path.exists(TRUST_FILE):
-        with open(TRUST_FILE, "r") as f: return set(f.read().splitlines())
-    return set()
-
-DIRETORIOS_CONFIAVEIS = carregar_confiaveis()
+DIRETORIOS_CONFIAVEIS = set(open(TRUST_FILE).read().splitlines()) if os.path.exists(TRUST_FILE) else set()
 
 def pedir_permissao(caminho):
     abs_path = os.path.abspath(caminho)
     if abs_path in DIRETORIOS_CONFIAVEIS: return True
-    escolha = questionary.select(f"⚠️  Confiar no diretório {abs_path}?", choices=["Sim", "Não"], style=custom_style).ask()
+    escolha = questionary.select(f"⚠️  Confiar em {abs_path}?", choices=["Sim", "Não"], style=custom_style).ask()
     if escolha == "Sim":
         DIRETORIOS_CONFIAVEIS.add(abs_path)
         with open(TRUST_FILE, "a") as f: f.write(f"{abs_path}\n")
         return True
     return False
 
-# --- A NOVA FUNÇÃO DE COMUNICAÇÃO (PROFISSIONAL) ---
+# --- COMUNICAÇÃO COM O SERVIDOR ---
 def chamar_ia(mensagens):
     global USAGE_DATA, MODELO_ATUAL
     USAGE_DATA["requests"] += 1
@@ -191,44 +192,29 @@ def chamar_ia(mensagens):
     data = {"messages": mensagens, "model": MODELO_ATUAL}
     
     try:
-        # Usa a sessão configurada com Retry e Pool
-        response = http_session.post(
-            api_url, 
-            json=data, 
-            timeout=(5, 60) # Timeout: 5s para conectar, 60s para ler a resposta (Render pode ser lento)
-        )
+        response = http_session.post(api_url, json=data, timeout=(5, 60))
         
-        # Se o Render devolver erro (429, 500, etc)
         if response.status_code == 429:
-            return "ERRO 429: CALMA LÁ! Abusaste do rate limit. Fica 15 minutos de castigo a pensar."
+            return "ERRO 429: CALMA LÁ! Abusaste do rate limit. Fica 15 minutos de castigo."
             
-        response.raise_for_status() # Lança erro se não for 200 OK
-        
-        texto_resposta = response.text
-        if not texto_resposta.strip():
-            return "ERRO: O servidor respondeu com um corpo vazio (Render acordou?)."
-        
+        response.raise_for_status()
         dados = response.json()
         
-        # A MATEMÁTICA DO IMPÉRIO
         tokens_reais = dados.get("usage", {}).get("total_tokens", 0)
         multiplicador = CUSTO_MODELO.get(MODELO_ATUAL, 1)
-        tokens_calculados = tokens_reais * multiplicador
-        
-        USAGE_DATA["tokens_usados"] += tokens_calculados
+        USAGE_DATA["tokens_usados"] += (tokens_reais * multiplicador)
         salvar_usage(USAGE_DATA)
         MODELO_ATUAL = dados.get("modelo_usado", MODELO_ATUAL)
         return dados["choices"][0]["message"]["content"]
         
     except requests.exceptions.Timeout:
-        return "ERRO DE TIMEOUT: O servidor demorou muito a responder (Render a dormir?). Tenta de novo."
+        return "ERRO DE TIMEOUT: O servidor demorou muito a responder (Render a dormir?)."
     except requests.exceptions.ConnectionError:
-        return "ERRO DE CONEXÃO: Verifica a tua internet ou se o Render está online."
-    except requests.exceptions.HTTPError as e:
-        return f"ERRO HTTP ({e.response.status_code}): {e.response.reason}"
+        return "ERRO DE CONEXÃO: Verifica a internet ou se o Render está online."
     except Exception as e:
-        return f"ERRO INESPERADO: {e}"
+        return f"ERRO: {e}"
 
+# --- EXECUÇÃO DE FERRAMENTAS ---
 def executar_ferramenta(resposta):
     try:
         pensamento = ""
@@ -306,7 +292,6 @@ def mostrar_help():
     table.add_row("/models", "Troca o modelo de IA")
     table.add_row("/usage", "Mostra a cota")
     table.add_row("/session", "Gerencia sessões")
-    table.add_row("/compact", "Resume a conversa")
     table.add_row("/clear", "Limpa o terminal")
     console.print(table)
 
@@ -317,7 +302,7 @@ def mostrar_usage():
     visual = min(100, percent)
     barra = "█" * int((visual / 100) * 20) + "░" * (20 - int((visual / 100) * 20))
     cor = "green" if percent < 50 else "yellow" if percent < 80 else "red"
-    console.print(Panel(f"[bold green]Modelo:[/bold green] {MODELO_ATUAL}\n[bold]Tokens (com multiplicador):[/bold] {usados}/{LIMITE_SEMANAL}\n[{cor}]{barra}[/{cor}] {percent:.1f}%\nRestantes: {restantes}", title="📊 Usage", border_style="blue"))
+    console.print(Panel(f"[bold green]Modelo:[/bold green] {MODELO_ATUAL}\n[bold]Tokens:[/bold] {usados}/{LIMITE_SEMANAL}\n[{cor}]{barra}[/{cor}] {percent:.1f}%\nRestantes: {restantes}", title="📊 Usage", border_style="blue"))
 
 def menu_sessoes(sessao_atual, mensagens_atuais):
     sessoes = listar_sessoes()
@@ -337,7 +322,7 @@ def menu_models():
         MODELO_ATUAL = escolha
         multiplicador = CUSTO_MODELO.get(MODELO_ATUAL, 1)
         if multiplicador >= 8:
-            console.print(Panel(f"[bold yellow]⚠️ AVISO DE USAGE:[/bold yellow]\nO {MODELO_ATUAL} consome {multiplicador}x mais a tua cota! Usa com moderação.", border_style="yellow", title="⚠️ Atenção"))
+            console.print(Panel(f"[bold yellow]⚠️ AVISO:[/bold yellow]\nO {MODELO_ATUAL} consome {multiplicador}x mais cota!", border_style="yellow"))
         else:
             console.print(f"[green]✅ Modelo: {MODELO_ATUAL} (Custo: {multiplicador}x)[/green]")
 
@@ -352,6 +337,10 @@ def barra_status(session_id):
 def main():
     global MODELO_ATUAL
     limpar_tela()
+    
+    # 1. Verifica atualização antes de tudo
+    verificar_atualizacao()
+
     os.makedirs(os.path.dirname(TERMOS_FILE), exist_ok=True)
     if not os.path.exists(TERMOS_FILE):
         if aceitar_termos():
@@ -360,7 +349,7 @@ def main():
     
     escolher_pasta_inicial()
     
-    console.print(Panel(f"[bold green]{gerar_banner()}[/bold green]\n[dim]v11.0 - Professional HTTP Client[/dim]", border_style="green", title="🦁 Tiny Cloud CLI"))
+    console.print(Panel(f"[bold green]{gerar_banner()}[/bold green]\n[dim]v{VERSAO_LOCAL} - Space Bunny Edition[/dim]", border_style="green", title="🦁 Tiny Cloud CLI"))
     
     session_id = str(uuid.uuid4())[:8]
     try:
@@ -381,7 +370,6 @@ def main():
             elif cmd == "/session":
                 session_id, mensagens = menu_sessoes(session_id, mensagens)
                 salvar_sessao(session_id, mensagens); limpar_tela(); continue
-            elif cmd == "/compact": continue 
             elif cmd == "/clear": limpar_tela(); continue
             elif cmd in ["sair", "exit"]: break
             elif not prompt.strip(): continue
