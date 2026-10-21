@@ -10,7 +10,7 @@ app.use(express.json());
 // --- SISTEMA DE CASTIGO (RATE LIMIT) ---
 const limitador = rateLimit({
     windowMs: 15 * 60 * 1000,
-    limit: 20,
+    limit: 30, // Aumentei para 30 para não bloquear os teus testes
     standardHeaders: 'draft-8',
     legacyHeaders: false,
     message: { error: "🚫 CASTIGO ATIVADO: Tu abusaste do sistema. Fica 15 minutos de castigo." },
@@ -18,8 +18,9 @@ const limitador = rateLimit({
 app.use('/api/', limitador);
 
 // --- VERSÃO DO SISTEMA ---
-const VERSAO_ATUAL = "11.0.0";
+const VERSAO_ATUAL = "11.5.0";
 
+app.get('/', (req, res) => res.send("🦁 Tiny Cloud Server está online."));
 app.get('/api/version', (req, res) => {
     res.json({ version: VERSAO_ATUAL });
 });
@@ -27,25 +28,20 @@ app.get('/api/version', (req, res) => {
 // --- CHAVES E MODELOS ---
 const BEATAPI_KEY = process.env.BEATAPI_API_KEY;
 const VYCEAI_KEY = process.env.VYCEAI_API_KEY;
-const XKIRO_KEY = process.env.XKIRO_API_KEY; // A chave nova
+const XKIRO_KEY = process.env.XKIRO_API_KEY;
 
 const BEATAPI_URL = "https://api.beatapi.io/v1/chat/completions";
 const VYCEAI_URL = "https://vyceai.com/v1/chat/completions";
 const XKIRO_URL = "https://api.xkiro.com/v1/chat/completions";
 
 const MODELOS = {
-    // VyceAI
     "agnes-3.0-flash": { url: VYCEAI_URL, key: VYCEAI_KEY },
     "deepseek-v4-flash": { url: VYCEAI_URL, key: VYCEAI_KEY },
     "deepseek-v4.1": { url: VYCEAI_URL, key: VYCEAI_KEY },
     "deepseek-v4.1-flash": { url: VYCEAI_URL, key: VYCEAI_KEY },
     "gpt-6-luna": { url: VYCEAI_URL, key: VYCEAI_KEY },
-    
-    // BeatAPI
     "gemini-3.8-flash": { url: BEATAPI_URL, key: BEATAPI_KEY },
     "jev-1.13": { url: BEATAPI_URL, key: BEATAPI_KEY },
-
-    // xKiro (Space Bunny)
     "space-bunny": { url: XKIRO_URL, key: XKIRO_KEY }
 };
 
