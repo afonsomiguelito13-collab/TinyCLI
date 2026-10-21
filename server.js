@@ -1,11 +1,29 @@
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const app = express();
 
+// Confia no proxy do Render para ler o IP real do cliente
 app.set('trust proxy', 1);
+
 app.use(cors());
 app.use(express.json());
 
+// --- SISTEMA DE CASTIGO (RATE LIMIT) ---
+const limitador = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutos de castigo
+    limit: 20, // Máximo de 20 pedidos por IP
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { 
+        error: "🚫 CASTIGO ATIVADO: Tu abusaste do sistema. Fica 15 minutos de castigo a pensar no que fizeste. Muda de comportamento." 
+    },
+});
+
+// Aplica o castigo a todas as rotas
+app.use('/api/', limitador);
+
+// --- CHAVES E MODELOS ---
 const BEATAPI_KEY = process.env.BEATAPI_API_KEY;
 const VYCEAI_KEY = process.env.VYCEAI_API_KEY;
 
@@ -13,10 +31,14 @@ const BEATAPI_URL = "https://api.beatapi.io/v1/chat/completions";
 const VYCEAI_URL = "https://vyceai.com/v1/chat/completions";
 
 const MODELOS = {
+    // VyceAI
     "agnes-3.0-flash": { url: VYCEAI_URL, key: VYCEAI_KEY },
     "deepseek-v4-flash": { url: VYCEAI_URL, key: VYCEAI_KEY },
     "deepseek-v4.1": { url: VYCEAI_URL, key: VYCEAI_KEY },
-    "deepseek-v4.1-flash": { url: VYCEAI_URL, key: VYCEAI_KEY }, // <-- ADICIONA ESTA LINHA
+    "deepseek-v4.1-flash": { url: VYCEAI_URL, key: VYCEAI_KEY },
+    "gpt-6-luna": { url: VYCEAI_URL, key: VYCEAI_KEY },
+    
+    // BeatAPI
     "gemini-3.8-flash": { url: BEATAPI_URL, key: BEATAPI_KEY },
     "jev-1.13": { url: BEATAPI_URL, key: BEATAPI_KEY }
 };
@@ -29,11 +51,6 @@ app.post('/api/chat', async (req, res) => {
         return res.status(400).json({ error: "Modelo inválido ou provider sem chave." });
     }
 
-    // Configura os headers para Streaming (SSE)
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-
     try {
         const response = await fetch(config.url, {
             method: 'POST',
@@ -44,36 +61,23 @@ app.post('/api/chat', async (req, res) => {
             body: JSON.stringify({
                 model: model,
                 messages: messages,
-                temperature: 0.3,
-                stream: true // Pede streaming à API de origem
+                temperature: 0.3
             })
         });
 
-        if (!response.ok) {
-            res.write(`data: ${JSON.stringify({ error: `Erro na API: ${response.status}` })}\n\n`);
-            return res.end();
-        }
-
-        // Lê o corpo da resposta como um stream e repassa para o cliente
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            
-            const chunk = decoder.decode(value, { stream: true });
-            // Repassa o chunk exatamente como veio (já está no formato SSE)
-            res.write(chunk);
-        }
+        const data = await response.json();
         
-        res.end();
-
+        if (!response.ok) return res.status(response.status).json(data);
+        
+        res.json({
+            choices: data.choices,
+            usage: data.usage,
+            modelo_usado: model
+        });
     } catch (error) {
-        res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
-        res.end();
+        res.status(500).json({ error: error.message });
     }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🦁 Tiny Cloud Server (Streaming) on port ${PORT}`));
+app.listen(PORT, () => console.log(`🦁 Tiny Cloud Server (Rate Limit ON) on port ${PORT}`));
