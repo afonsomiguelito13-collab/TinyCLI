@@ -24,9 +24,26 @@ SESSIONS_DIR = os.path.expanduser("~/.local/share/.tinycli_sessions")
 TERMOS_FILE = os.path.expanduser("~/.local/share/.tinycli_terms.json")
 CONFIG_FILE = os.path.expanduser("~/.local/share/.tinycli_config.json")
 
-MODELOS_DISPONIVEIS = ["deepseek-v4.1", "deepseek-v4.1-flash", "gemini-3.8-flash", "agnes-3.0-flash"]
+MODELOS_DISPONIVEIS = [
+    "deepseek-v4.1", 
+    "deepseek-v4.1-flash", 
+    "gemini-3.8-flash", 
+    "agnes-3.0-flash",
+    "jev-1.13",
+    "gpt-6-luna"
+]
 MODELO_ATUAL = MODELOS_DISPONIVEIS[0]
 LIMITE_SEMANAL = 50000
+
+# --- A TABELA DE CUSTOS DO IMPÉRIO ---
+CUSTO_MODELO = {
+    "deepseek-v4.1": 3,
+    "deepseek-v4.1-flash": 3,
+    "gemini-3.8-flash": 4,
+    "agnes-3.0-flash": 3,
+    "jev-1.13": 1,
+    "gpt-6-luna": 8
+}
 
 COMANDOS_PROIBIDOS = ["rm -rf", "rm -r /", "reboot", "shutdown", "mkfs", "dd if=", "flash", "fastboot", "wipe", "format", "chmod -R 777", "chown -R"]
 
@@ -46,21 +63,17 @@ def mostrar_ban_aviso():
 def limpar_tela():
     os.system('clear' if os.name == 'posix' else 'cls')
 
-# --- SISTEMA DE CONFIGURAÇÃO (PASTA PADRÃO) ---
 def carregar_config():
     if os.path.exists(CONFIG_FILE):
         try:
-            with open(CONFIG_FILE, "r") as f:
-                return json.load(f)
+            with open(CONFIG_FILE, "r") as f: return json.load(f)
         except: pass
     return {"last_dir": os.getcwd()}
 
 def salvar_config(diretorio):
     os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-    with open(CONFIG_FILE, "w") as f:
-        json.dump({"last_dir": diretorio}, f)
+    with open(CONFIG_FILE, "w") as f: json.dump({"last_dir": diretorio}, f)
 
-# --- SELETOR DE PASTA INICIAL ---
 def escolher_pasta_inicial():
     config = carregar_config()
     pasta_padrao = config.get("last_dir", os.getcwd())
@@ -68,43 +81,26 @@ def escolher_pasta_inicial():
     limpar_tela()
     console.print(Panel("[bold cyan]📁 Onde queres trabalhar hoje?[/bold cyan]", border_style="cyan"))
     
-    opcoes = [
-        f"Usar a pasta atual: {pasta_padrao}",
-        "Escolher outra pasta (navegar)",
-        "Usar a Home (~)"
-    ]
-    
+    opcoes = [f"Usar a pasta atual: {pasta_padrao}", "Escolher outra pasta (navegar)", "Usar a Home (~)"]
     escolha = questionary.select("Seleciona uma opção:", choices=opcoes, style=custom_style).ask()
     
-    if escolha == "Usar a Home (~)":
-        pasta_final = os.path.expanduser("~")
+    if escolha == "Usar a Home (~)": pasta_final = os.path.expanduser("~")
     elif escolha == "Escolher outra pasta (navegar)":
-        # Navegador de pastas simples (pede o caminho)
         pasta_final = questionary.path("Caminho da pasta:", default=pasta_padrao, style=custom_style).ask()
         if not pasta_final or not os.path.isdir(pasta_final):
             console.print("[red]Pasta inválida. A usar a atual.[/red]")
             pasta_final = os.getcwd()
-    else:
-        pasta_final = pasta_padrao
+    else: pasta_final = pasta_padrao
 
     os.chdir(pasta_final)
     salvar_config(pasta_final)
     console.print(f"[green]✅ A trabalhar em: {pasta_final}[/green]")
     time.sleep(1)
 
-# --- SISTEMA DE APROVAÇÃO DE COMANDOS ---
 def pedir_aprovacao_comando(cmd):
-    console.print(Panel(f"[bold yellow]O Agente Cez quer executar o seguinte comando:[/bold yellow]\n\n[bold white]{cmd}[/bold white]", border_style="yellow", title="⚠️ APROVAÇÃO NECESSÁRIA"))
-    
-    escolha = questionary.select(
-        "Aprovas a execução deste comando?",
-        choices=["Sim, executar", "Não, bloquear"],
-        style=custom_style
-    ).ask()
-    
-    return escolha == "Sim, executar"
+    console.print(Panel(f"[bold yellow]O Agente quer executar:[/bold yellow]\n\n[bold white]{cmd}[/bold white]", border_style="yellow", title="⚠️ APROVAÇÃO NECESSÁRIA"))
+    return questionary.select("Aprovas?", choices=["Sim, executar", "Não, bloquear"], style=custom_style).ask() == "Sim, executar"
 
-# ... (Aceitar termos, Usage, Trust etc mantidos iguais) ...
 def aceitar_termos():
     limpar_tela()
     console.print(Panel("[bold green]🦁 Bem-vindo ao Tiny Cloud CLI[/bold green]\n\n[1] Aceitar\n[2] Privacidade\n[3] Sair", title="📜 Termos", border_style="yellow"))
@@ -174,13 +170,25 @@ def chamar_ia(mensagens):
     try:
         req = urllib.request.Request(api_url, data=json.dumps(data).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST")
         with urllib.request.urlopen(req) as response:
-            dados = json.loads(response.read().decode("utf-8"))
-            tokens = dados.get("usage", {}).get("total_tokens", 0)
-            USAGE_DATA["tokens_usados"] += tokens
+            texto_resposta = response.read().decode("utf-8")
+            if not texto_resposta.strip():
+                return "ERRO: O servidor respondeu com um corpo vazio (Render acordou?)."
+            
+            dados = json.loads(texto_resposta)
+            
+            # A MATEMÁTICA DO IMPÉRIO
+            tokens_reais = dados.get("usage", {}).get("total_tokens", 0)
+            multiplicador = CUSTO_MODELO.get(MODELO_ATUAL, 1)
+            tokens_calculados = tokens_reais * multiplicador
+            
+            USAGE_DATA["tokens_usados"] += tokens_calculados
             salvar_usage(USAGE_DATA)
             MODELO_ATUAL = dados.get("modelo_usado", MODELO_ATUAL)
             return dados["choices"][0]["message"]["content"]
+            
     except urllib.error.HTTPError as e:
+        if e.code == 429:
+            return "ERRO 429: CALMA LÁ! Abusaste do rate limit. Fica 15 minutos de castigo a pensar."
         return f"ERRO ({e.code}): {e.reason}"
     except Exception as e:
         return f"ERRO DE CONEXÃO: {e}"
@@ -198,10 +206,8 @@ def executar_ferramenta(resposta):
         
         if "<tool_call>" in resposta:
             cmd_match = re.search(r'<arg_value>(.*?)</arg_value>', resposta, re.DOTALL)
-            if cmd_match:
-                acao = {"tool": "run_command", "command": cmd_match.group(1).strip()}
-            else:
-                return None, False, pensamento
+            if cmd_match: acao = {"tool": "run_command", "command": cmd_match.group(1).strip()}
+            else: return None, False, pensamento
         else:
             acao = json.loads(resposta.strip())
             
@@ -220,23 +226,16 @@ def executar_ferramenta(resposta):
 
             if ferramenta == "run_command":
                 cmd = acao.get("command")
-                
-                # --- VERIFICAÇÃO DE BAN E APROVAÇÃO ---
                 if verificar_comando_perigoso(cmd):
                     mostrar_ban_aviso()
                     return "ACÇÃO BLOQUEADA PELO SISTEMA DE BAN.", False, pensamento
-                
                 if not pedir_aprovacao_comando(cmd):
                     return "O utilizador NEGOU a execução do comando.", False, pensamento
 
                 with console.status(f"[bold yellow]⚙️ Executando:[/bold yellow] {cmd}", spinner="dots"):
                     res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-                
                 saida = (res.stdout + res.stderr).strip()
-                if res.returncode != 0:
-                    console.print(Panel(f"[red]Erro:[/red]\n{saida}", border_style="red"))
-                    return f"Erro:\n{saida}", True, pensamento
-                console.print(Panel(f"[green]Sucesso:[/green]\n{saida}", border_style="green"))
+                if res.returncode != 0: return f"Erro:\n{saida}", True, pensamento
                 return (saida or "Comando executado."), False, pensamento
                 
             elif ferramenta == "create_file":
@@ -252,15 +251,12 @@ def executar_ferramenta(resposta):
             elif ferramenta == "run_code":
                 code = acao.get("code")
                 console.print(Panel(f"[bold yellow]🐍 O Agente quer executar Python:[/bold yellow]\n{code}", border_style="yellow"))
-                
-                if not questionary.confirm("Aprovas a execução deste código?").ask():
+                if not questionary.confirm("Aprovas?").ask():
                     return "O utilizador NEGOU a execução do código.", False, pensamento
-                    
-                with console.status("[bold yellow]🐍 Executando Python...[/bold yellow]", spinner="dots"):
+                with console.status("[bold yellow]🐍 Executando...[/bold yellow]", spinner="dots"):
                     res = subprocess.run(["python3", "-c", code], capture_output=True, text=True)
                 saida = (res.stdout + res.stderr).strip()
-                if res.returncode != 0:
-                    return f"Erro no código:\n{saida}", True, pensamento
+                if res.returncode != 0: return f"Erro no código:\n{saida}", True, pensamento
                 return (saida or "Código executado."), False, pensamento
         return None, False, pensamento
     except json.JSONDecodeError:
@@ -285,7 +281,7 @@ def mostrar_usage():
     visual = min(100, percent)
     barra = "█" * int((visual / 100) * 20) + "░" * (20 - int((visual / 100) * 20))
     cor = "green" if percent < 50 else "yellow" if percent < 80 else "red"
-    console.print(Panel(f"[bold green]Modelo:[/bold green] {MODELO_ATUAL}\n[bold]Tokens:[/bold] {usados}/{LIMITE_SEMANAL}\n[{cor}]{barra}[/{cor}] {percent:.1f}%\nRestantes: {restantes}", title="📊 Usage", border_style="blue"))
+    console.print(Panel(f"[bold green]Modelo:[/bold green] {MODELO_ATUAL}\n[bold]Tokens (com multiplicador):[/bold] {usados}/{LIMITE_SEMANAL}\n[{cor}]{barra}[/{cor}] {percent:.1f}%\nRestantes: {restantes}", title="📊 Usage", border_style="blue"))
 
 def menu_sessoes(sessao_atual, mensagens_atuais):
     sessoes = listar_sessoes()
@@ -301,7 +297,13 @@ def menu_sessoes(sessao_atual, mensagens_atuais):
 def menu_models():
     global MODELO_ATUAL
     escolha = questionary.select("Modelo:", choices=MODELOS_DISPONIVEIS, style=custom_style, default=MODELO_ATUAL).ask()
-    if escolha: MODELO_ATUAL = escolha
+    if escolha:
+        MODELO_ATUAL = escolha
+        multiplicador = CUSTO_MODELO.get(MODELO_ATUAL, 1)
+        if multiplicador >= 8:
+            console.print(Panel(f"[bold yellow]⚠️ AVISO DE USAGE:[/bold yellow]\nO {MODELO_ATUAL} consome {multiplicador}x mais a tua cota! Usa com moderação.", border_style="yellow", title="⚠️ Atenção"))
+        else:
+            console.print(f"[green]✅ Modelo: {MODELO_ATUAL} (Custo: {multiplicador}x)[/green]")
 
 def gerar_banner():
     try: return pyfiglet.figlet_format("TINY CLI", font="slant")
@@ -320,10 +322,9 @@ def main():
             with open(TERMOS_FILE, "w") as f: json.dump({"aceite": True}, f)
             limpar_tela()
     
-    # Escolher a pasta de trabalho antes de abrir o CLI
     escolher_pasta_inicial()
     
-    console.print(Panel(f"[bold green]{gerar_banner()}[/bold green]\n[dim]v9.5 - Human-in-the-loop[/dim]", border_style="green", title="🦁 Tiny Cloud CLI"))
+    console.print(Panel(f"[bold green]{gerar_banner()}[/bold green]\n[dim]v10.5 - Custos e Castigos[/dim]", border_style="green", title="🦁 Tiny Cloud CLI"))
     
     session_id = str(uuid.uuid4())[:8]
     try:
