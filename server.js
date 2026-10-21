@@ -3,32 +3,35 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const app = express();
 
-// Confia no proxy do Render para ler o IP real do cliente
 app.set('trust proxy', 1);
-
 app.use(cors());
 app.use(express.json());
 
 // --- SISTEMA DE CASTIGO (RATE LIMIT) ---
 const limitador = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutos de castigo
-    limit: 20, // Máximo de 20 pedidos por IP
+    windowMs: 15 * 60 * 1000,
+    limit: 20,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
-    message: { 
-        error: "🚫 CASTIGO ATIVADO: Tu abusaste do sistema. Fica 15 minutos de castigo a pensar no que fizeste. Muda de comportamento." 
-    },
+    message: { error: "🚫 CASTIGO ATIVADO: Tu abusaste do sistema. Fica 15 minutos de castigo." },
 });
-
-// Aplica o castigo a todas as rotas
 app.use('/api/', limitador);
+
+// --- VERSÃO DO SISTEMA ---
+const VERSAO_ATUAL = "11.0.0";
+
+app.get('/api/version', (req, res) => {
+    res.json({ version: VERSAO_ATUAL });
+});
 
 // --- CHAVES E MODELOS ---
 const BEATAPI_KEY = process.env.BEATAPI_API_KEY;
 const VYCEAI_KEY = process.env.VYCEAI_API_KEY;
+const XKIRO_KEY = process.env.XKIRO_API_KEY; // A chave nova
 
 const BEATAPI_URL = "https://api.beatapi.io/v1/chat/completions";
 const VYCEAI_URL = "https://vyceai.com/v1/chat/completions";
+const XKIRO_URL = "https://api.xkiro.com/v1/chat/completions";
 
 const MODELOS = {
     // VyceAI
@@ -40,7 +43,10 @@ const MODELOS = {
     
     // BeatAPI
     "gemini-3.8-flash": { url: BEATAPI_URL, key: BEATAPI_KEY },
-    "jev-1.13": { url: BEATAPI_URL, key: BEATAPI_KEY }
+    "jev-1.13": { url: BEATAPI_URL, key: BEATAPI_KEY },
+
+    // xKiro (Space Bunny)
+    "space-bunny": { url: XKIRO_URL, key: XKIRO_KEY }
 };
 
 app.post('/api/chat', async (req, res) => {
@@ -80,4 +86,4 @@ app.post('/api/chat', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🦁 Tiny Cloud Server (Rate Limit ON) on port ${PORT}`));
+app.listen(PORT, () => console.log(`🦁 Tiny Cloud Server (v${VERSAO_ATUAL}) on port ${PORT}`));
