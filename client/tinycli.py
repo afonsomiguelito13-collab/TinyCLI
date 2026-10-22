@@ -20,7 +20,7 @@ custom_style = Style([
     ('highlighted', 'fg:#00ff00 bold'), ('selected', 'fg:#00ff00')
 ])
 
-VERSAO_LOCAL = "11.6.0"
+VERSAO_LOCAL = "11.8.0"
 INSTALL_URL = "https://raw.githubusercontent.com/afonsomiguelito13-collab/TinyCLI/main/public/install.sh"
 
 SERVER_URL = os.environ.get("TINY_SERVER_URL", "https://tinycli.onrender.com")
@@ -40,9 +40,8 @@ MODELOS_DISPONIVEIS = [
     "space-bunny"
 ]
 MODELO_ATUAL = MODELOS_DISPONIVEIS[0]
-
-# --- AUMENTO DO LIMITE PARA 5M ---
-LIMITE_SEMANAL = 5000000 
+LIMITE_SEMANAL = 5000000 # 5 Milhões
+LIMITE_SOFT_NUDGE = 5 # Após 5 pedidos na sessão, começa a "avisar"
 
 CUSTO_MODELO = {
     "deepseek-v4.1": 3,
@@ -81,7 +80,7 @@ def verificar_atualizacao():
                     console.print("[green]✅ Atualização concluída! Reinicia o Tiny CLI.[/green]")
                     sys.exit(0)
     except Exception:
-        pass # Ignora erros se o Render estiver a dormir
+        pass
 
 def carregar_config():
     if os.path.exists(CONFIG_FILE):
@@ -127,12 +126,25 @@ def mostrar_ban_aviso():
 
 def aceitar_termos():
     limpar_tela()
-    console.print(Panel("[bold green]🦁 Bem-vindo ao Tiny Cloud CLI[/bold green]\n\n[1] Aceitar\n[2] Privacidade\n[3] Sair", title="📜 Termos", border_style="yellow"))
-    escolha = questionary.select("Aceitas os termos?", choices=["1. Aceitar", "2. Privacidade", "3. Não aceitar"], style=custom_style).ask()
-    if escolha == "2. Privacidade":
-        console.print(Panel("Não guardamos conversas.", title="🔒 Privacidade", border_style="cyan"))
-        return aceitar_termos()
-    elif escolha == "3. Não aceitar": sys.exit(0)
+    texto_termos = (
+        "[bold white]TERMOS DE SERVIÇO E POLÍTICA DE PRIVACIDADE - TINY CLOUD CLI[/bold white]\n\n"
+        "[bold yellow]1. Aceitação dos Termos[/bold yellow]\n"
+        "Ao aceder ou utilizar o Tiny Cloud CLI (\"Serviço\"), concordas em ficar vinculado a estes Termos. Se não concordares, não deves utilizar o Serviço.\n\n"
+        "[bold yellow]2. Descrição do Serviço[/bold yellow]\n"
+        "O Tiny Cloud CLI é uma ferramenta de interface de linha de comando que permite a interação com Modelos de Linguagem (LLMs) de terceiros. O Serviço é fornecido \"como está\".\n\n"
+        "[bold yellow]3. Privacidade e Dados[/bold yellow]\n"
+        "O Tiny Cloud CLI não armazena os teus prompts ou conversas nos servidores do backend. Todo o histórico é guardado localmente no teu dispositivo. As chaves de API são mantidas em segurança.\n\n"
+        "[bold yellow]4. Responsabilidade e Uso Aceitável[/bold yellow]\n"
+        "És o único responsável pelo código gerado e pelos comandos que aprovares. O abuso do sistema (Rate Limit) resultará em banimento.\n"
+    )
+    
+    console.print(Panel(texto_termos, title="📜 Termos e Privacidade", border_style="yellow"))
+    
+    escolha = questionary.select("Aceitas os Termos de Serviço e a Política de Privacidade?", choices=["Sim, eu aceito", "Não, sair"], style=custom_style).ask()
+    
+    if escolha == "Não, sair":
+        console.print("[red]❌ Termos não aceites. A encerrar...[/red]")
+        sys.exit(0)
     return True
 
 def listar_sessoes():
@@ -183,10 +195,30 @@ def chamar_ia(mensagens):
     global USAGE_DATA, MODELO_ATUAL
     USAGE_DATA["requests"] += 1
     api_url = f"{SERVER_URL}/api/chat"
+    health_url = f"{SERVER_URL}/api/version"
     data = {"messages": mensagens, "model": MODELO_ATUAL}
     
+    # Acordar o Render
+    max_tentativas = 5
+    acordou = False
+    
+    for tentativa in range(max_tentativas):
+        try:
+            res = http_session.get(health_url, timeout=(5, 10))
+            if res.status_code == 200:
+                acordou = True
+                break
+        except Exception:
+            pass
+            
+        with console.status(f"[bold yellow]⏳ A ligar ao servidor... (Tentativa {tentativa+1}/{max_tentativas})[/bold yellow]", spinner="bouncingBall"):
+            time.sleep(2)
+
+    if not acordou:
+        return "ERRO: O servidor demorou muito a acordar. Tenta de novo daqui a pouco."
+
     try:
-        response = http_session.post(api_url, json=data, timeout=(5, 60))
+        response = http_session.post(api_url, json=data, timeout=(10, 90))
         
         if response.status_code == 429:
             return "ERRO 429: CALMA LÁ! Abusaste do rate limit. Fica 15 minutos de castigo."
@@ -202,15 +234,15 @@ def chamar_ia(mensagens):
         return dados["choices"][0]["message"]["content"]
         
     except requests.exceptions.Timeout:
-        return "ERRO DE TIMEOUT: O servidor demorou muito (Render a dormir?)."
+        return "ERRO DE TIMEOUT: O servidor acordou, mas a IA demorou muito a responder."
     except requests.exceptions.ConnectionError:
         return "ERRO DE CONEXÃO: Verifica a internet ou se o Render está online."
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 404:
-            return "ERRO 404: Rota não encontrada. O servidor no Render pode estar com o código antigo. Faz deploy do server.js novo."
+            return "ERRO 404: Rota não encontrada. O servidor no Render pode estar com o código antigo."
         return f"ERRO HTTP ({e.response.status_code}): {e.response.reason}"
     except Exception as e:
-        return f"ERRO: {e}"
+        return f"ERRO INESPERADO: {e}"
 
 def executar_ferramenta(resposta):
     try:
@@ -327,8 +359,16 @@ def menu_models():
     if escolha:
         MODELO_ATUAL = escolha
         multiplicador = CUSTO_MODELO.get(MODELO_ATUAL, 1)
+        
+        # O SOFT NUDGE NO MENU
         if multiplicador >= 8:
-            console.print(Panel(f"[bold yellow]⚠️ AVISO:[/bold yellow]\nO {MODELO_ATUAL} consome {multiplicador}x mais cota!", border_style="yellow"))
+            console.print(Panel(
+                f"[bold yellow]🚀 Upgrade Sugerido![/bold yellow]\n\n"
+                f"O modelo [bold]{MODELO_ATUAL}[/bold] consome [bold]{multiplicador}x[/bold] mais a tua cota.\n"
+                f"Para uso intensivo sem limites, considera o [bold cyan]Tiny CLI Go[/bold cyan] (brevemente).\n"
+                f"Por agora, o modelo [green]DeepSeek V4.1[/green] é a tua melhor opção gratuita.",
+                border_style="yellow", title="💡 Dica"
+            ))
         else:
             console.print(f"[green]✅ Modelo: {MODELO_ATUAL} (Custo: {multiplicador}x)[/green]")
 
@@ -379,6 +419,16 @@ def main():
             elif cmd in ["sair", "exit"]: break
             elif not prompt.strip(): continue
             
+            # O SOFT NUDGE OCULTO (Após 5 pedidos na mesma sessão)
+            if USAGE_DATA.get("requests", 0) % 5 == 0 and USAGE_DATA.get("requests", 0) > 0:
+                console.print(Panel(
+                    "[bold cyan]💡 Sabias?[/bold cyan]\n"
+                    "Os utilizadores do plano Free têm limites. Se precisares de mais potência, "
+                    "o [bold]Tiny CLI Go[/bold] está a chegar para remover os limites e dar acesso prioritário ao GPT-6 Luna.\n"
+                    "[dim]Continua a usar o Free por agora. Estás a ir muito bem![/dim]",
+                    border_style="cyan", title="🚀 Upgrade"
+                ))
+
             mensagens.append({"role": "user", "content": prompt})
             
             tentativas = 0
