@@ -20,7 +20,7 @@ custom_style = Style([
     ('highlighted', 'fg:#00ff00 bold'), ('selected', 'fg:#00ff00')
 ])
 
-VERSAO_LOCAL = "11.5.0"
+VERSAO_LOCAL = "11.6.0"
 INSTALL_URL = "https://raw.githubusercontent.com/afonsomiguelito13-collab/TinyCLI/main/public/install.sh"
 
 SERVER_URL = os.environ.get("TINY_SERVER_URL", "https://tinycli.onrender.com")
