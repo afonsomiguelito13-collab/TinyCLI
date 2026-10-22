@@ -20,7 +20,7 @@ custom_style = Style([
     ('highlighted', 'fg:#00ff00 bold'), ('selected', 'fg:#00ff00')
 ])
 
-VERSAO_LOCAL = "11.8.0"
+VERSAO_LOCAL = "12.0.0"
 INSTALL_URL = "https://raw.githubusercontent.com/afonsomiguelito13-collab/TinyCLI/main/public/install.sh"
 
 SERVER_URL = os.environ.get("TINY_SERVER_URL", "https://tinycli.onrender.com")
@@ -32,25 +32,26 @@ CONFIG_FILE = os.path.expanduser("~/.local/share/.tinycli_config.json")
 
 MODELOS_DISPONIVEIS = [
     "deepseek-v4.1", 
-    "deepseek-v4.1-flash", 
+    "deepseek-v4-flash", 
     "gemini-3.8-flash", 
     "agnes-3.0-flash",
     "jev-1.13",
     "gpt-6-luna",
-    "space-bunny"
+    "space-bunny",
+    "longcat-2.5"
 ]
 MODELO_ATUAL = MODELOS_DISPONIVEIS[0]
 LIMITE_SEMANAL = 5000000 # 5 Milhões
-LIMITE_SOFT_NUDGE = 5 # Após 5 pedidos na sessão, começa a "avisar"
 
 CUSTO_MODELO = {
     "deepseek-v4.1": 3,
-    "deepseek-v4.1-flash": 3,
+    "deepseek-v4-flash": 3,
     "gemini-3.8-flash": 4,
     "agnes-3.0-flash": 3,
     "jev-1.13": 1,
     "gpt-6-luna": 8,
-    "space-bunny": 1
+    "space-bunny": 1,
+    "longcat-2.5": 1
 }
 
 http_session = requests.Session()
@@ -129,18 +130,18 @@ def aceitar_termos():
     texto_termos = (
         "[bold white]TERMOS DE SERVIÇO E POLÍTICA DE PRIVACIDADE - TINY CLOUD CLI[/bold white]\n\n"
         "[bold yellow]1. Aceitação dos Termos[/bold yellow]\n"
-        "Ao aceder ou utilizar o Tiny Cloud CLI (\"Serviço\"), concordas em ficar vinculado a estes Termos. Se não concordares, não deves utilizar o Serviço.\n\n"
+        "Ao aceder ou utilizar o Tiny Cloud CLI (\"Serviço\"), concordas em ficar vinculado a estes Termos.\n\n"
         "[bold yellow]2. Descrição do Serviço[/bold yellow]\n"
-        "O Tiny Cloud CLI é uma ferramenta de interface de linha de comando que permite a interação com Modelos de Linguagem (LLMs) de terceiros. O Serviço é fornecido \"como está\".\n\n"
+        "O Tiny Cloud CLI é uma ferramenta que permite a interação com Modelos de Linguagem (LLMs) de terceiros. O Serviço é fornecido \"como está\".\n\n"
         "[bold yellow]3. Privacidade e Dados[/bold yellow]\n"
-        "O Tiny Cloud CLI não armazena os teus prompts ou conversas nos servidores do backend. Todo o histórico é guardado localmente no teu dispositivo. As chaves de API são mantidas em segurança.\n\n"
+        "O Tiny Cloud CLI não armazena os teus prompts nos servidores do backend. Todo o histórico é guardado localmente no teu dispositivo. As chaves de API são mantidas em segurança.\n\n"
         "[bold yellow]4. Responsabilidade e Uso Aceitável[/bold yellow]\n"
-        "És o único responsável pelo código gerado e pelos comandos que aprovares. O abuso do sistema (Rate Limit) resultará em banimento.\n"
+        "És o único responsável pelo código gerado. O abuso do sistema (Rate Limit) resultará em banimento.\n"
     )
     
     console.print(Panel(texto_termos, title="📜 Termos e Privacidade", border_style="yellow"))
     
-    escolha = questionary.select("Aceitas os Termos de Serviço e a Política de Privacidade?", choices=["Sim, eu aceito", "Não, sair"], style=custom_style).ask()
+    escolha = questionary.select("Aceitas os Termos de Serviço?", choices=["Sim, eu aceito", "Não, sair"], style=custom_style).ask()
     
     if escolha == "Não, sair":
         console.print("[red]❌ Termos não aceites. A encerrar...[/red]")
@@ -196,12 +197,10 @@ def chamar_ia(mensagens):
     USAGE_DATA["requests"] += 1
     api_url = f"{SERVER_URL}/api/chat"
     health_url = f"{SERVER_URL}/api/version"
-    data = {"messages": mensagens, "model": MODELO_ATUAL}
     
     # Acordar o Render
     max_tentativas = 5
     acordou = False
-    
     for tentativa in range(max_tentativas):
         try:
             res = http_session.get(health_url, timeout=(5, 10))
@@ -210,39 +209,59 @@ def chamar_ia(mensagens):
                 break
         except Exception:
             pass
-            
         with console.status(f"[bold yellow]⏳ A ligar ao servidor... (Tentativa {tentativa+1}/{max_tentativas})[/bold yellow]", spinner="bouncingBall"):
             time.sleep(2)
 
     if not acordou:
         return "ERRO: O servidor demorou muito a acordar. Tenta de novo daqui a pouco."
 
-    try:
-        response = http_session.post(api_url, json=data, timeout=(10, 90))
-        
-        if response.status_code == 429:
-            return "ERRO 429: CALMA LÁ! Abusaste do rate limit. Fica 15 minutos de castigo."
+    # --- FALLBACK NO CLIENTE ---
+    modelos_fallback = ["deepseek-v4.1", "deepseek-v4-flash"]
+    
+    for modelo_tentativa in [MODELO_ATUAL] + modelos_fallback:
+        try:
+            if modelo_tentativa != MODELO_ATUAL:
+                console.print(f"[yellow]⚠️ {MODELO_ATUAL} falhou (instável). A tentar fallback para {modelo_tentativa}...[/yellow]")
             
-        response.raise_for_status()
-        dados = response.json()
-        
-        tokens_reais = dados.get("usage", {}).get("total_tokens", 0)
-        multiplicador = CUSTO_MODELO.get(MODELO_ATUAL, 1)
-        USAGE_DATA["tokens_usados"] += (tokens_reais * multiplicador)
-        salvar_usage(USAGE_DATA)
-        MODELO_ATUAL = dados.get("modelo_usado", MODELO_ATUAL)
-        return dados["choices"][0]["message"]["content"]
-        
-    except requests.exceptions.Timeout:
-        return "ERRO DE TIMEOUT: O servidor acordou, mas a IA demorou muito a responder."
-    except requests.exceptions.ConnectionError:
-        return "ERRO DE CONEXÃO: Verifica a internet ou se o Render está online."
-    except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 404:
-            return "ERRO 404: Rota não encontrada. O servidor no Render pode estar com o código antigo."
-        return f"ERRO HTTP ({e.response.status_code}): {e.response.reason}"
-    except Exception as e:
-        return f"ERRO INESPERADO: {e}"
+            data_pedido = {"messages": mensagens, "model": modelo_tentativa}
+            response = http_session.post(api_url, json=data_pedido, timeout=(10, 90))
+            
+            if response.status_code == 429:
+                return "ERRO 429: CALMA LÁ! Abusaste do rate limit. Fica 15 minutos de castigo."
+                
+            # Se o modelo experimental falhar, tenta o próximo
+            if response.status_code == 503 and modelo_tentativa == MODELO_ATUAL:
+                continue
+                
+            response.raise_for_status()
+            dados = response.json()
+            
+            tokens_reais = dados.get("usage", {}).get("total_tokens", 0)
+            multiplicador = CUSTO_MODELO.get(modelo_tentativa, 1)
+            USAGE_DATA["tokens_usados"] += (tokens_reais * multiplicador)
+            salvar_usage(USAGE_DATA)
+            
+            if modelo_tentativa != MODELO_ATUAL:
+                MODELO_ATUAL = modelo_tentativa
+                
+            return dados["choices"][0]["message"]["content"]
+            
+        except requests.exceptions.Timeout:
+            if modelo_tentativa == MODELO_ATUAL: continue
+            return "ERRO DE TIMEOUT: O servidor demorou muito a responder."
+        except requests.exceptions.ConnectionError:
+            if modelo_tentativa == MODELO_ATUAL: continue
+            return "ERRO DE CONEXÃO: Verifica a internet."
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 503 and modelo_tentativa == MODELO_ATUAL: continue
+            if e.response.status_code == 404:
+                return "ERRO 404: Rota não encontrada. O servidor no Render pode estar com o código antigo."
+            return f"ERRO HTTP ({e.response.status_code}): {e.response.reason}"
+        except Exception as e:
+            if modelo_tentativa == MODELO_ATUAL: continue
+            return f"ERRO INESPERADO: {e}"
+    
+    return "ERRO: Todos os modelos falharam. Tenta outro modelo no /models."
 
 def executar_ferramenta(resposta):
     try:
@@ -346,11 +365,18 @@ def menu_sessoes(sessao_atual, mensagens_atuais):
     sessoes = listar_sessoes()
     opcoes = ["Nova Sessão"] + [f"Carregar: {s}" for s in sessoes]
     escolha = questionary.select("Sessões:", choices=opcoes, style=custom_style).ask()
-    if escolha == "Nova Sessão": return str(uuid.uuid4())[:8], []
+    
+    if escolha == "Nova Sessão": 
+        try:
+            with open(os.path.expanduser("~/.tinycli/SKILLS.md"), "r", encoding="utf-8") as f: skill = f.read()
+        except: skill = "Você é o Tiny CLI."
+        return str(uuid.uuid4())[:8], [{"role": "system", "content": skill}]
+        
     elif escolha and escolha.startswith("Carregar:"):
         sid = escolha.replace("Carregar: ", "")
         msgs = carregar_sessao(sid)
-        if msgs: return sid, msgs
+        if msgs: 
+            return sid, msgs
     return sessao_atual, mensagens_atuais
 
 def menu_models():
@@ -360,12 +386,17 @@ def menu_models():
         MODELO_ATUAL = escolha
         multiplicador = CUSTO_MODELO.get(MODELO_ATUAL, 1)
         
-        # O SOFT NUDGE NO MENU
-        if multiplicador >= 8:
+        if MODELO_ATUAL == "longcat-2.5":
+            console.print(Panel(
+                "[bold yellow]⚠️ Modelo Experimental[/bold yellow]\n"
+                "O LongCat 2.5 é um preview gratuito. Se ele falhar, o sistema troca automaticamente para o DeepSeek.",
+                border_style="yellow", title="🐱 Meituan"
+            ))
+        elif multiplicador >= 6:
             console.print(Panel(
                 f"[bold yellow]🚀 Upgrade Sugerido![/bold yellow]\n\n"
                 f"O modelo [bold]{MODELO_ATUAL}[/bold] consome [bold]{multiplicador}x[/bold] mais a tua cota.\n"
-                f"Para uso intensivo sem limites, considera o [bold cyan]Tiny CLI Go[/bold cyan] (brevemente).\n"
+                f"Para uso intensivo sem limites, considera o [bold cyan]Tiny CLI Go[/bold cyan].\n"
                 f"Por agora, o modelo [green]DeepSeek V4.1[/green] é a tua melhor opção gratuita.",
                 border_style="yellow", title="💡 Dica"
             ))
@@ -394,7 +425,7 @@ def main():
     
     escolher_pasta_inicial()
     
-    console.print(Panel(f"[bold green]{gerar_banner()}[/bold green]\n[dim]v{VERSAO_LOCAL} - Space Bunny Edition[/dim]", border_style="green", title="🦁 Tiny Cloud CLI"))
+    console.print(Panel(f"[bold green]{gerar_banner()}[/bold green]\n[dim]v{VERSAO_LOCAL} - Model Pool Edition[/dim]", border_style="green", title="🦁 Tiny Cloud CLI"))
     
     session_id = str(uuid.uuid4())[:8]
     try:
@@ -414,12 +445,24 @@ def main():
             elif cmd == "/models": menu_models(); continue
             elif cmd == "/session":
                 session_id, mensagens = menu_sessoes(session_id, mensagens)
-                salvar_sessao(session_id, mensagens); limpar_tela(); continue
+                salvar_sessao(session_id, mensagens)
+                limpar_tela()
+                
+                # Mostra o histórico carregado
+                if len(mensagens) > 1:
+                    console.print(Panel("[bold cyan]Histórico Carregado:[/bold cyan]", border_style="cyan"))
+                    for msg in mensagens:
+                        if msg["role"] == "user":
+                            console.print(f"[bold blue]👤 Tu:[/bold blue] {msg['content']}")
+                        elif msg["role"] == "assistant":
+                            console.print(f"[bold green]🤖 Tiny:[/bold green] {msg['content']}")
+                    console.print()
+                continue
             elif cmd == "/clear": limpar_tela(); continue
             elif cmd in ["sair", "exit"]: break
             elif not prompt.strip(): continue
             
-            # O SOFT NUDGE OCULTO (Após 5 pedidos na mesma sessão)
+            # O SOFT NUDGE OCULTO (A cada 5 pedidos)
             if USAGE_DATA.get("requests", 0) % 5 == 0 and USAGE_DATA.get("requests", 0) > 0:
                 console.print(Panel(
                     "[bold cyan]💡 Sabias?[/bold cyan]\n"
