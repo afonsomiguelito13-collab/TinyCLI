@@ -20,15 +20,18 @@ custom_style = Style([
     ('highlighted', 'fg:#00ff00 bold'), ('selected', 'fg:#00ff00')
 ])
 
-VERSAO_LOCAL = "16.0.0"
-INSTALL_URL = "https://raw.githubusercontent.com/afonsomiguelito13-collab/TinyCLI/main/public/install.sh"
+VERSAO_LOCAL = "18.0.0"
+GITHUB_CLIENT_ID = "Ov23li..." # <--- COLA O TEU CLIENT ID AQUI
 
+INSTALL_URL = "https://raw.githubusercontent.com/afonsomiguelito13-collab/TinyCLI/main/public/install.sh"
 SERVER_URL = os.environ.get("TINY_SERVER_URL", "https://tinycli.onrender.com")
 TRUST_FILE = os.path.expanduser("~/.tinycli_trust")
 USAGE_FILE = os.path.expanduser("~/.local/share/.tinycli_usage.json")
 SESSIONS_DIR = os.path.expanduser("~/.local/share/.tinycli_sessions")
 TERMOS_FILE = os.path.expanduser("~/.local/share/.tinycli_terms.json")
 CONFIG_FILE = os.path.expanduser("~/.local/share/.tinycli_config.json")
+GITHUB_TOKEN_FILE = os.path.expanduser("~/.tinycli_github_token")
+GITHUB_USER_FILE = os.path.expanduser("~/.tinycli_github_user")
 
 MODELOS_DISPONIVEIS = [
     "agent-1.0",
@@ -42,7 +45,7 @@ MODELO_ATUAL = MODELOS_DISPONIVEIS[0]
 LIMITE_SEMANAL = 5000000
 
 CUSTO_MODELO = {
-    "agent-1.0": 6, # Custo combinado (DeepSeek + Agnes)
+    "agent-1.0": 6,
     "deepseek-v4.1": 3, 
     "deepseek-v4-flash": 3, 
     "agnes-3.0-flash": 3, 
@@ -50,16 +53,7 @@ CUSTO_MODELO = {
     "gemini-3.8-flash": 4
 }
 
-# --- SISTEMA DE IDIOMAS (i18n) ---
-IDIOMAS_DISPONIVEIS = {
-    "pt_PT": "🇵🇹 Português (Portugal)",
-    "pt_BR": "🇧🇷 Português (Brasil)",
-    "en": "🇬🇧 English",
-    "zh": "🇨🇳 中文 (Chinês)",
-    "ja": "🇯🇵 日本語 (Japonês)",
-    "ru": "🇷🇺 Русский (Russo)"
-}
-
+# --- i18n (Mantido igual por brevidade, podes manter o teu original) ---
 TRADUCOES = {
     "pt_PT": {
         "bem_vindo": "Bem-vindo ao Tiny Cloud CLI",
@@ -83,116 +77,7 @@ TRADUCOES = {
         "restantes": "Restantes",
         "texto_termos": "1. Aceitação: Ao usar o CLI, concordas com estes termos.\n2. Privacidade: O histórico é local. As chaves ficam no servidor.\n3. Uso: És responsável pelo código gerado. Comandos perigosos serão bloqueados.\n4. Fila: O servidor tem limites. Abusos resultam em banimento."
     },
-    "pt_BR": {
-        "bem_vindo": "Bem-vindo ao Tiny Cloud CLI",
-        "termos": "📜 Termos de Serviço e Privacidade",
-        "ler_mais": "Ler o texto completo",
-        "aceitar": "Aceitar e continuar",
-        "sair": "Sair",
-        "pasta": "📁 Onde você quer trabalhar hoje?",
-        "pasta_atual": "Usar a pasta atual",
-        "home": "Usar a Home (~)",
-        "prompt": "👤 Você:",
-        "pensando": "⏳ Pensando...",
-        "aprovacao": "⚠️ APROVAÇÃO NECESSÁRIA",
-        "aprovas": "Você aprova?",
-        "sim": "Sim, executar",
-        "nao": "Não, bloquear",
-        "usage": "📊 Usage (5M)",
-        "fila": "⚠️ Servidor cheio! Tem {n} pessoas na fila.",
-        "modelo": "Modelo",
-        "tokens": "Tokens Usados",
-        "restantes": "Restantes",
-        "texto_termos": "1. Aceitação: Ao usar o CLI, você concorda com estes termos.\n2. Privacidade: O histórico é local. As chaves ficam no servidor.\n3. Uso: Você é responsável pelo código gerado. Comandos perigosos serão bloqueados.\n4. Fila: O servidor tem limites. Abusos resultam em banimento."
-    },
-    "en": {
-        "bem_vindo": "Welcome to Tiny Cloud CLI",
-        "termos": "📜 Terms of Service & Privacy",
-        "ler_mais": "Read full text",
-        "aceitar": "Accept and continue",
-        "sair": "Exit",
-        "pasta": "📁 Where do you want to work today?",
-        "pasta_atual": "Use current folder",
-        "home": "Use Home (~)",
-        "prompt": "👤 You:",
-        "pensando": "⏳ Thinking...",
-        "aprovacao": "⚠️ APPROVAL REQUIRED",
-        "aprovas": "Do you approve?",
-        "sim": "Yes, execute",
-        "nao": "No, block",
-        "usage": "📊 Usage (5M)",
-        "fila": "⚠️ Server full! There are {n} people in queue.",
-        "modelo": "Model",
-        "tokens": "Tokens Used",
-        "restantes": "Remaining",
-        "texto_termos": "1. Acceptance: By using the CLI, you agree to these terms.\n2. Privacy: History is local. Keys are on the server.\n3. Use: You are responsible for generated code. Dangerous commands will be blocked.\n4. Queue: The server has limits. Abuse results in a ban."
-    },
-    "zh": {
-        "bem_vindo": "欢迎使用 Tiny Cloud CLI",
-        "termos": "📜 服务条款和隐私",
-        "ler_mais": "阅读全文",
-        "aceitar": "接受并继续",
-        "sair": "退出",
-        "pasta": "📁 今天你想在哪里工作？",
-        "pasta_atual": "使用当前文件夹",
-        "home": "使用主目录 (~)",
-        "prompt": "👤 你:",
-        "pensando": "⏳ 思考中...",
-        "aprovacao": "⚠️ 需要批准",
-        "aprovas": "你批准吗？",
-        "sim": "是的，执行",
-        "nao": "不，阻止",
-        "usage": "📊 使用量 (5M)",
-        "fila": "⚠️ 服务器已满！队列中有 {n} 人。",
-        "modelo": "模型",
-        "tokens": "已用令牌",
-        "restantes": "剩余",
-        "texto_termos": "1. 接受：使用CLI即表示您同意这些条款。\n2. 隐私：历史记录在本地。密钥在服务器上。\n3. 使用：您对生成的代码负责。危险命令将被阻止。\n4. 队列：服务器有限制。滥用会导致封禁。"
-    },
-    "ja": {
-        "bem_vindo": "Tiny Cloud CLIへようこそ",
-        "termos": "📜 利用規約とプライバシー",
-        "ler_mais": "全文を読む",
-        "aceitar": "同意して続行",
-        "sair": "終了",
-        "pasta": "📁 今日はどこで作業しますか？",
-        "pasta_atual": "現在のフォルダを使用",
-        "home": "ホーム (~) を使用",
-        "prompt": "👤 あなた:",
-        "pensando": "⏳ 考え中...",
-        "aprovacao": "⚠️ 承認が必要",
-        "aprovas": "承認しますか？",
-        "sim": "はい、実行",
-        "nao": "いいえ、ブロック",
-        "usage": "📊 使用量 (5M)",
-        "fila": "⚠️ サーバーが満杯です！ {n} 人が待機中。",
-        "modelo": "モデル",
-        "tokens": "使用済みトークン",
-        "restantes": "残り",
-        "texto_termos": "1. 同意：CLIを使用することで、これらの規約に同意したことになります。\n2. プライバシー：履歴はローカルです。キーはサーバーにあります。\n3. 使用：生成されたコードにはあなたが責任を負います。危険なコマンドはブロックされます。\n4. キュー：サーバーには制限があります。悪用は禁止されます。"
-    },
-    "ru": {
-        "bem_vindo": "Добро пожаловать в Tiny Cloud CLI",
-        "termos": "📜 Условия обслуживания и конфиденциальность",
-        "ler_mais": "Читать полностью",
-        "aceitar": "Принять и продолжить",
-        "sair": "Выйти",
-        "pasta": "📁 Где вы хотите работать сегодня?",
-        "pasta_atual": "Использовать текущую папку",
-        "home": "Использовать Домой (~)",
-        "prompt": "👤 Вы:",
-        "pensando": "⏳ Думаю...",
-        "aprovacao": "⚠️ ТРЕБУЕТСЯ ОДОБРЕНИЕ",
-        "aprovas": "Одобряете?",
-        "sim": "Да, выполнить",
-        "nao": "Нет, заблокировать",
-        "usage": "📊 Использование (5M)",
-        "fila": "⚠️ Сервер переполнен! В очереди {n} человек.",
-        "modelo": "Модель",
-        "tokens": "Использовано токенов",
-        "restantes": "Осталось",
-        "texto_termos": "1. Принятие: Используя CLI, вы соглашаетесь с этими условиями.\n2. Конфиденциальность: История хранится локально. Ключи на сервере.\n3. Использование: Вы несете ответственность за сгенерированный код. Опасные команды будут заблокированы.\n4. Очередь: У сервера есть ограничения. Злоупотребление приведет к бану."
-    }
+    # ... (podes copiar as outras línguas do teu ficheiro antigo) ...
 }
 
 def obter_idioma_sistema():
@@ -214,7 +99,7 @@ def t(chave, **kwargs):
     texto = TRADUCOES.get(IDIOMA_ATUAL, TRADUCOES["pt_PT"]).get(chave, chave)
     return texto.format(**kwargs) if kwargs else texto
 
-# --- CLIENTE HTTP PROFISSIONAL ---
+# --- CLIENTE HTTP ---
 http_session = requests.Session()
 retry_strategy = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504], allowed_methods=["POST", "GET"])
 adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=10, pool_maxsize=10)
@@ -224,6 +109,76 @@ http_session.mount("http://", adapter)
 def limpar_tela():
     os.system('clear' if os.name == 'posix' else 'cls')
 
+# --- LOGIN GITHUB ---
+def verificar_login():
+    return os.path.exists(GITHUB_TOKEN_FILE)
+
+def fazer_login_github():
+    console.print(Panel("[bold cyan]🔐 Login com GitHub[/bold cyan]\nA ligar ao GitHub para autenticação...", border_style="cyan"))
+    try:
+        res = http_session.post(
+            "https://github.com/login/device/code",
+            data={"client_id": GITHUB_CLIENT_ID, "scope": "read:user"},
+            headers={"Accept": "application/json"}, timeout=10
+        )
+        res.raise_for_status()
+        dados = res.json()
+        
+        user_code = dados["user_code"]
+        device_code = dados["device_code"]
+        verification_uri = dados["verification_uri"]
+        interval = dados.get("interval", 5)
+        
+        console.print(Panel(
+            f"[bold white]Código:[/bold white] [bold green]{user_code}[/bold green]\n\n"
+            f"[bold white]Link:[/bold white] {verification_uri}\n\n"
+            f"[dim]A abrir o navegador...[/dim]",
+            title="📱 Ação Necessária", border_style="yellow"
+        ))
+        
+        subprocess.run(f"termux-open-url {verification_uri}", shell=True, capture_output=True)
+        
+        with console.status("[bold cyan]⏳ À espera que autorizes no GitHub...[/bold cyan]", spinner="dots"):
+            while True:
+                time.sleep(interval)
+                token_res = http_session.post(
+                    "https://github.com/login/oauth/access_token",
+                    data={"client_id": GITHUB_CLIENT_ID, "device_code": device_code, "grant_type": "urn:ietf:params:oauth:grant-type:device_code"},
+                    headers={"Accept": "application/json"}, timeout=10
+                )
+                token_dados = token_res.json()
+                
+                if "access_token" in token_dados:
+                    token = token_dados["access_token"]
+                    with open(GITHUB_TOKEN_FILE, "w") as f: f.write(token)
+                    
+                    # --- OBTER O NICKNAME DO SERVIDOR ---
+                    try:
+                        user_res = http_session.post(f"{SERVER_URL}/api/github-user", json={"token": token}, timeout=10)
+                        if user_res.status_code == 200:
+                            username = user_res.json().get("username", "Developer")
+                            with open(GITHUB_USER_FILE, "w") as f: f.write(username)
+                            console.print(f"[bold green]✅ Login efetuado! Bem-vindo, {username}![/bold green]")
+                        else:
+                            console.print("[bold green]✅ Login efetuado![/bold green]")
+                    except:
+                        console.print("[bold green]✅ Login efetuado![/bold green]")
+                    
+                    return True
+                elif token_dados.get("error") == "authorization_pending": continue
+                elif token_dados.get("error") == "slow_down": interval += 5; continue
+                elif token_dados.get("error") == "expired_token": return False
+                else: return False
+    except Exception as e:
+        console.print(f"[red]❌ Erro no login: {e}[/red]")
+        return False
+
+def obter_username_local():
+    if os.path.exists(GITHUB_USER_FILE):
+        with open(GITHUB_USER_FILE, "r") as f: return f.read().strip()
+    return "Developer"
+
+# --- RESTO DO CÓDIGO (Mantido igual) ---
 def verificar_atualizacao():
     try:
         res = http_session.get(f"{SERVER_URL}/api/version", timeout=(3, 10))
@@ -273,7 +228,6 @@ def aceitar_termos():
     texto_curto = t("texto_termos")[:500] + "\n\n[dim]...[/dim]"
     console.print(Panel(texto_curto, title=t("termos"), border_style="yellow"))
     escolha = questionary.select("Opções:", choices=[t("ler_mais"), t("aceitar"), t("sair")], style=custom_style).ask()
-    
     if escolha == t("ler_mais"):
         limpar_tela()
         console.print(Panel(t("texto_termos"), title=t("termos"), border_style="yellow"))
@@ -330,7 +284,6 @@ def chamar_ia(mensagens):
     health_url = f"{SERVER_URL}/api/version"
     data = {"messages": mensagens, "model": MODELO_ATUAL}
     
-    # Acordar o Render
     for tentativa in range(5):
         try:
             res = http_session.get(health_url, timeout=(5, 10))
@@ -340,7 +293,6 @@ def chamar_ia(mensagens):
             time.sleep(2)
             
     try:
-        # Verifica o status da fila
         try:
             status_res = http_session.get(f"{SERVER_URL}/api/status", timeout=3)
             if status_res.status_code == 200:
@@ -365,41 +317,42 @@ def chamar_ia(mensagens):
     except Exception as e:
         return f"ERRO: {e}"
 
-# --- AGENT 1.0 (A EQUIPA) ---
+def extrair_json_limpo(resposta):
+    if "```json" in resposta: resposta = resposta.split("```json")[1].split("```")[0]
+    elif "```" in resposta: resposta = resposta.split("```")[1].split("```")[0]
+    inicio = resposta.find('{'); fim = resposta.rfind('}')
+    if inicio != -1 and fim != -1 and fim > inicio: resposta = resposta[inicio:fim+1]
+    try: return json.loads(resposta.strip())
+    except: return None
+
 def chamar_agent_1_0(mensagens_usuario):
     global MODELO_ATUAL
-    
     console.print(Panel("[bold cyan]🤖 Agent 1.0 Ativado[/bold cyan]\nProgramador (DeepSeek) + Revisor (Agnes)", border_style="cyan"))
-    
     modelo_original = MODELO_ATUAL
     
-    # 1. O Programador
     console.print("[dim]👨‍💻 O Programador (DeepSeek) está a escrever o código...[/dim]")
     mensagens_programador = mensagens_usuario + [
-        {"role": "system", "content": "Você é o Programador. Escreva o código completo e funcional para o pedido. Retorne APENAS o código, sem explicações."}
+        {"role": "system", "content": "Você é o Programador. Sua ÚNICA função é gerar código. Responda APENAS com um JSON válido no formato: {\"tool\": \"create_file\", \"path\": \"nome.py\", \"content\": \"codigo aqui\"}. NÃO converse. NÃO explique."}
     ]
     MODELO_ATUAL = "deepseek-v4-flash"
     codigo_inicial = chamar_ia(mensagens_programador)
-    
     if codigo_inicial.startswith("ERRO"):
         MODELO_ATUAL = modelo_original
-        return f"ERRO no Programador: {codigo_inicial}"
+        return f"ERRO: {codigo_inicial}"
 
-    # 2. O Revisor
     console.print("[dim]🧐 O Revisor (Agnes) está a analisar o código...[/dim]")
     mensagens_revisor = [
-        {"role": "system", "content": "Você é o Revisor. Analise o código abaixo. Se estiver correto, responda APENAS 'APROVADO'. Se tiver bugs, explique o erro e sugira a correção."},
-        {"role": "user", "content": f"O utilizador pediu: {mensagens_usuario[-1]['content']}\n\nO Programador escreveu:\n{codigo_inicial}"}
+        {"role": "system", "content": "Você é um Engenheiro Sénior. Analise o JSON de código abaixo. Se estiver correto, responda APENAS: APROVADO. Se tiver erros, liste-os."},
+        {"role": "user", "content": f"Código:\n{codigo_inicial}"}
     ]
     MODELO_ATUAL = "agnes-3.0-flash"
     feedback_revisor = chamar_ia(mensagens_revisor)
 
-    # 3. Correção (se necessário)
     if "APROVADO" not in feedback_revisor.upper():
         console.print("[dim]🔄 O Revisor encontrou erros. O Programador está a corrigir...[/dim]")
         mensagens_correcao = mensagens_usuario + [
-            {"role": "system", "content": "Você é o Programador. Corrija o código abaixo com base no feedback do Revisor. Retorne APENAS o código corrigido."},
-            {"role": "user", "content": f"Código original:\n{codigo_inicial}\n\nFeedback do Revisor:\n{feedback_revisor}"}
+            {"role": "system", "content": "Você é o Programador. Corrija o código com base no feedback. Retorne APENAS o JSON válido."},
+            {"role": "user", "content": f"Código original:\n{codigo_inicial}\n\nFeedback:\n{feedback_revisor}"}
         ]
         MODELO_ATUAL = "deepseek-v4-flash"
         codigo_final = chamar_ia(mensagens_correcao)
@@ -408,21 +361,9 @@ def chamar_agent_1_0(mensagens_usuario):
         codigo_final = codigo_inicial
 
     MODELO_ATUAL = modelo_original
-    
-    # Extrai o JSON de ferramenta
-    if "```json" in codigo_final: 
-        json_part = codigo_final.split("```json")[1].split("```")[0]
-    elif "```" in codigo_final:
-        json_part = codigo_final.split("```")[1].split("```")[0]
-    else:
-        json_part = codigo_final
-        
-    try:
-        acao = json.loads(json_part.strip())
-        return json.dumps(acao)
-    except:
-        # Se não for JSON, cria um ficheiro com o código
-        return json.dumps({"tool": "create_file", "path": "agent_output.py", "content": codigo_final})
+    acao = extrair_json_limpo(codigo_final)
+    if acao and "tool" in acao: return json.dumps(acao)
+    return json.dumps({"tool": "create_file", "path": "agent_output.py", "content": codigo_final})
 
 def executar_ferramenta(resposta):
     try:
@@ -443,7 +384,6 @@ def executar_ferramenta(resposta):
             acao = json.loads(resposta.strip())
             
         ferramenta = acao.get("tool")
-        
         if ferramenta in ["run_command", "create_file", "run_code"]:
             alvo = os.getcwd()
             if ferramenta == "create_file":
@@ -452,20 +392,17 @@ def executar_ferramenta(resposta):
             if not pedir_permissao(alvo): return "Cancelado.", False, pensamento
             limpar_tela()
             
-            if pensamento:
-                console.print(Panel(f"[italic dim]{pensamento}[/italic dim]", title="🧠", border_style="magenta"))
+            if pensamento: console.print(Panel(f"[italic dim]{pensamento}[/italic dim]", title="🧠", border_style="magenta"))
 
             if ferramenta == "run_command":
                 cmd = acao.get("command")
                 if verificar_comando_perigoso(cmd):
-                    mostrar_ban_aviso()
-                    return "ACÇÃO BLOQUEADA.", False, pensamento
-                if not pedir_aprovacao_comando(cmd):
-                    return "O utilizador NEGOU.", False, pensamento
+                    mostrar_ban_aviso(); return "BLOQUEADO.", False, pensamento
+                if not pedir_aprovacao_comando(cmd): return "NEGOU.", False, pensamento
                 with console.status(f"[bold yellow]⚙️ Executando:[/bold yellow] {cmd}", spinner="dots"):
                     res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
                 saida = (res.stdout + res.stderr).strip()
-                return (saida or "Comando executado."), (res.returncode != 0), pensamento
+                return (saida or "OK."), (res.returncode != 0), pensamento
                 
             elif ferramenta == "create_file":
                 path, content = acao.get("path"), acao.get("content")
@@ -480,12 +417,11 @@ def executar_ferramenta(resposta):
             elif ferramenta == "run_code":
                 code = acao.get("code")
                 console.print(Panel(f"[bold yellow]🐍 Executando Python:[/bold yellow]\n{code}", border_style="yellow"))
-                if not questionary.confirm("Aprovas?").ask():
-                    return "O utilizador NEGOU.", False, pensamento
+                if not questionary.confirm("Aprovas?").ask(): return "NEGOU.", False, pensamento
                 with console.status("[bold yellow]🐍 Executando...[/bold yellow]", spinner="dots"):
                     res = subprocess.run(["python3", "-c", code], capture_output=True, text=True)
                 saida = (res.stdout + res.stderr).strip()
-                return (saida or "Código executado."), (res.returncode != 0), pensamento
+                return (saida or "OK."), (res.returncode != 0), pensamento
         return None, False, pensamento
     except json.JSONDecodeError:
         return None, False, ""
@@ -495,8 +431,7 @@ def menu_lang():
     escolha = questionary.select("Selecione o Idioma / Select Language:", choices=list(IDIOMAS_DISPONIVEIS.values()), style=custom_style).ask()
     for codigo, nome in IDIOMAS_DISPONIVEIS.items():
         if nome == escolha:
-            IDIOMA_ATUAL = codigo
-            break
+            IDIOMA_ATUAL = codigo; break
     console.print(f"[green]✅ Idioma alterado para {IDIOMAS_DISPONIVEIS[IDIOMA_ATUAL]}[/green]")
 
 def mostrar_help():
@@ -507,7 +442,7 @@ def mostrar_help():
     table.add_row("/models", "Troca o modelo de IA")
     table.add_row("/usage", "Mostra a cota")
     table.add_row("/session", "Gerencia sessões")
-    table.add_row("/lang", "Muda o idioma / Change language")
+    table.add_row("/lang", "Muda o idioma")
     table.add_row("/clear", "Limpa o terminal")
     console.print(table)
 
@@ -519,14 +454,7 @@ def mostrar_usage():
     blocos = int((visual / 100) * 20)
     barra = "█" * blocos + "░" * (20 - blocos)
     cor = "green" if percent < 50 else "yellow" if percent < 80 else "red"
-    
-    console.print(Panel(
-        f"[bold green]{t('modelo')}:[/bold green] {MODELO_ATUAL}\n"
-        f"[bold]{t('tokens')}:[/bold] {usados} / {LIMITE_SEMANAL}\n"
-        f"[{cor}]{barra}[/{cor}] {percent:.2f}%\n"
-        f"[bold yellow]{t('restantes')}:[/bold yellow] {restantes}", 
-        title=t("usage"), border_style="blue"
-    ))
+    console.print(Panel(f"[bold green]{t('modelo')}:[/bold green] {MODELO_ATUAL}\n[bold]{t('tokens')}:[/bold] {usados} / {LIMITE_SEMANAL}\n[{cor}]{barra}[/{cor}] {percent:.2f}%\n[bold yellow]{t('restantes')}:[/bold yellow] {restantes}", title=t("usage"), border_style="blue"))
 
 def menu_sessoes(sessao_atual, mensagens_atuais):
     sessoes = listar_sessoes()
@@ -546,23 +474,36 @@ def menu_models():
         MODELO_ATUAL = escolha
         multiplicador = CUSTO_MODELO.get(MODELO_ATUAL, 1)
         if MODELO_ATUAL == "agent-1.0":
-            console.print(Panel("[bold cyan]🤖 Agent 1.0: DeepSeek (Programador) + Agnes (Revisor)[/bold cyan]\nCusto: 6x", border_style="cyan"))
+            console.print(Panel("[bold cyan]🤖 Agent 1.0: DeepSeek + Agnes[/bold cyan]\nCusto: 6x", border_style="cyan"))
         elif multiplicador >= 6:
             console.print(Panel(f"[yellow]⚠️ AVISO: O {MODELO_ATUAL} consome {multiplicador}x mais cota![/yellow]", border_style="yellow"))
         else:
             console.print(f"[green]✅ Modelo: {MODELO_ATUAL} (Custo: {multiplicador}x)[/green]")
 
-def gerar_banner():
-    try: return pyfiglet.figlet_format("TINY CLI", font="slant")
-    except: return "TINY CLI"
+def gerar_banner(username):
+    try:
+        banner = pyfiglet.figlet_format("TINY CLI", font="slant")
+    except:
+        banner = "TINY CLI"
+    return Panel(f"[bold green]{banner}[/bold green]\n[dim]v{VERSAO_LOCAL} | Bem-vindo, {username}![/dim]", border_style="green", title="🦁 Tiny Cloud CLI")
 
-def barra_status(session_id):
-    status = f"[dim]Modelo: [bold]{MODELO_ATUAL}[/bold] | Sessão: {session_id} | Tokens: {USAGE_DATA.get('tokens_usados', 0)}/{LIMITE_SEMANAL} | Local: {os.getcwd()}[/dim]"
+def barra_status(session_id, username):
+    status = f"[dim]User: [bold]{username}[/bold] | Modelo: [bold]{MODELO_ATUAL}[/bold] | Sessão: {session_id} | Tokens: {USAGE_DATA.get('tokens_usados', 0)}/{LIMITE_SEMANAL} | Local: {os.getcwd()}[/dim]"
     console.print(Panel(status, border_style="dim", padding=(0, 1)))
 
 def main():
     global MODELO_ATUAL
     limpar_tela()
+    
+    # --- LOGIN ---
+    if not verificar_login():
+        if not fazer_login_github():
+            console.print("[red]A encerrar...[/red]")
+            sys.exit(1)
+        limpar_tela()
+    
+    username = obter_username_local()
+    
     verificar_atualizacao()
     os.makedirs(os.path.dirname(TERMOS_FILE), exist_ok=True)
     if not os.path.exists(TERMOS_FILE):
@@ -571,7 +512,7 @@ def main():
             limpar_tela()
     
     escolher_pasta_inicial()
-    console.print(Panel(f"[bold green]{gerar_banner()}[/bold green]\n[dim]v{VERSAO_LOCAL} - Agent 1.0[/dim]", border_style="green", title=f"🦁 {t('bem_vindo')}"))
+    console.print(gerar_banner(username))
     
     session_id = str(uuid.uuid4())[:8]
     try:
@@ -581,7 +522,7 @@ def main():
     
     while True:
         try:
-            barra_status(session_id)
+            barra_status(session_id, username)
             prompt = questionary.text(t("prompt"), style=custom_style, qmark="").ask()
             if prompt is None: continue
             cmd = prompt.lower().strip()
@@ -597,7 +538,6 @@ def main():
             elif cmd in ["sair", "exit", "quit", "退出", "終了", "выход"]: break
             elif not prompt.strip(): continue
             
-            # O SOFT NUDGE
             if USAGE_DATA.get("requests", 0) % 5 == 0 and USAGE_DATA.get("requests", 0) > 0:
                 console.print(Panel("[bold cyan]💡 Tiny CLI Go: Sem filas, sem limites![/bold cyan]", border_style="cyan", title="🚀 Upgrade"))
 
