@@ -20,8 +20,8 @@ custom_style = Style([
     ('highlighted', 'fg:#00ff00 bold'), ('selected', 'fg:#00ff00')
 ])
 
-VERSAO_LOCAL = "18.0.0"
-GITHUB_CLIENT_ID = "Ov23li..." # <--- COLA O TEU CLIENT ID AQUI
+VERSAO_LOCAL = "18.5.0"
+GITHUB_CLIENT_ID = "Ov23lia18KwHbwNmBmBv" # O teu Client ID real
 
 INSTALL_URL = "https://raw.githubusercontent.com/afonsomiguelito13-collab/TinyCLI/main/public/install.sh"
 SERVER_URL = os.environ.get("TINY_SERVER_URL", "https://tinycli.onrender.com")
@@ -53,7 +53,16 @@ CUSTO_MODELO = {
     "gemini-3.8-flash": 4
 }
 
-# --- i18n (Mantido igual por brevidade, podes manter o teu original) ---
+# --- SISTEMA DE IDIOMAS (i18n) ---
+IDIOMAS_DISPONIVEIS = {
+    "pt_PT": "🇵🇹 Português (Portugal)",
+    "pt_BR": "🇧🇷 Português (Brasil)",
+    "en": "🇬🇧 English",
+    "zh": "🇨🇳 中文 (Chinês)",
+    "ja": "🇯🇵 日本語 (Japonês)",
+    "ru": "🇷🇺 Русский (Russo)"
+}
+
 TRADUCOES = {
     "pt_PT": {
         "bem_vindo": "Bem-vindo ao Tiny Cloud CLI",
@@ -77,7 +86,116 @@ TRADUCOES = {
         "restantes": "Restantes",
         "texto_termos": "1. Aceitação: Ao usar o CLI, concordas com estes termos.\n2. Privacidade: O histórico é local. As chaves ficam no servidor.\n3. Uso: És responsável pelo código gerado. Comandos perigosos serão bloqueados.\n4. Fila: O servidor tem limites. Abusos resultam em banimento."
     },
-    # ... (podes copiar as outras línguas do teu ficheiro antigo) ...
+    "pt_BR": {
+        "bem_vindo": "Bem-vindo ao Tiny Cloud CLI",
+        "termos": "📜 Termos de Serviço e Privacidade",
+        "ler_mais": "Ler o texto completo",
+        "aceitar": "Aceitar e continuar",
+        "sair": "Sair",
+        "pasta": "📁 Onde você quer trabalhar hoje?",
+        "pasta_atual": "Usar a pasta atual",
+        "home": "Usar a Home (~)",
+        "prompt": "👤 Você:",
+        "pensando": "⏳ Pensando...",
+        "aprovacao": "⚠️ APROVAÇÃO NECESSÁRIA",
+        "aprovas": "Você aprova?",
+        "sim": "Sim, executar",
+        "nao": "Não, bloquear",
+        "usage": "📊 Usage (5M)",
+        "fila": "⚠️ Servidor cheio! Tem {n} pessoas na fila.",
+        "modelo": "Modelo",
+        "tokens": "Tokens Usados",
+        "restantes": "Restantes",
+        "texto_termos": "1. Aceitação: Ao usar o CLI, você concorda com estes termos.\n2. Privacidade: O histórico é local. As chaves ficam no servidor.\n3. Uso: Você é responsável pelo código gerado. Comandos perigosos serão bloqueados.\n4. Fila: O servidor tem limites. Abusos resultam em banimento."
+    },
+    "en": {
+        "bem_vindo": "Welcome to Tiny Cloud CLI",
+        "termos": "📜 Terms of Service & Privacy",
+        "ler_mais": "Read full text",
+        "aceitar": "Accept and continue",
+        "sair": "Exit",
+        "pasta": "📁 Where do you want to work today?",
+        "pasta_atual": "Use current folder",
+        "home": "Use Home (~)",
+        "prompt": "👤 You:",
+        "pensando": "⏳ Thinking...",
+        "aprovacao": "⚠️ APPROVAL REQUIRED",
+        "aprovas": "Do you approve?",
+        "sim": "Yes, execute",
+        "nao": "No, block",
+        "usage": "📊 Usage (5M)",
+        "fila": "⚠️ Server full! There are {n} people in queue.",
+        "modelo": "Model",
+        "tokens": "Tokens Used",
+        "restantes": "Remaining",
+        "texto_termos": "1. Acceptance: By using the CLI, you agree to these terms.\n2. Privacy: History is local. Keys are on the server.\n3. Use: You are responsible for generated code. Dangerous commands will be blocked.\n4. Queue: The server has limits. Abuse results in a ban."
+    },
+    "zh": {
+        "bem_vindo": "欢迎使用 Tiny Cloud CLI",
+        "termos": "📜 服务条款和隐私",
+        "ler_mais": "阅读全文",
+        "aceitar": "接受并继续",
+        "sair": "退出",
+        "pasta": "📁 今天你想在哪里工作？",
+        "pasta_atual": "使用当前文件夹",
+        "home": "使用主目录 (~)",
+        "prompt": "👤 你:",
+        "pensando": "⏳ 思考中...",
+        "aprovacao": "⚠️ 需要批准",
+        "aprovas": "你批准吗？",
+        "sim": "是的，执行",
+        "nao": "不，阻止",
+        "usage": "📊 使用量 (5M)",
+        "fila": "⚠️ 服务器已满！队列中有 {n} 人。",
+        "modelo": "模型",
+        "tokens": "已用令牌",
+        "restantes": "剩余",
+        "texto_termos": "1. 接受：使用CLI即表示您同意这些条款。\n2. 隐私：历史记录在本地。密钥在服务器上。\n3. 使用：您对生成的代码负责。危险命令将被阻止。\n4. 队列：服务器有限制。滥用会导致封禁。"
+    },
+    "ja": {
+        "bem_vindo": "Tiny Cloud CLIへようこそ",
+        "termos": "📜 利用規約とプライバシー",
+        "ler_mais": "全文を読む",
+        "aceitar": "同意して続行",
+        "sair": "終了",
+        "pasta": "📁 今日はどこで作業しますか？",
+        "pasta_atual": "現在のフォルダを使用",
+        "home": "ホーム (~) を使用",
+        "prompt": "👤 あなた:",
+        "pensando": "⏳ 考え中...",
+        "aprovacao": "⚠️ 承認が必要",
+        "aprovas": "承認しますか？",
+        "sim": "はい、実行",
+        "nao": "いいえ、ブロック",
+        "usage": "📊 使用量 (5M)",
+        "fila": "⚠️ サーバーが満杯です！ {n} 人が待機中。",
+        "modelo": "モデル",
+        "tokens": "使用済みトークン",
+        "restantes": "残り",
+        "texto_termos": "1. 同意：CLIを使用することで、これらの規約に同意したことになります。\n2. プライバシー：履歴はローカルです。キーはサーバーにあります。\n3. 使用：生成されたコードにはあなたが責任を負います。危険なコマンドはブロックされます。\n4. キュー：サーバーには制限があります。悪用は禁止されます。"
+    },
+    "ru": {
+        "bem_vindo": "Добро пожаловать в Tiny Cloud CLI",
+        "termos": "📜 Условия обслуживания и конфиденциальность",
+        "ler_mais": "Читать полностью",
+        "aceitar": "Принять и продолжить",
+        "sair": "Выйти (Blyat)",
+        "pasta": "📁 Где вы хотите работать сегодня?",
+        "pasta_atual": "Использовать текущую папку",
+        "home": "Использовать Домой (~)",
+        "prompt": "👤 Вы:",
+        "pensando": "⏳ Думаю...",
+        "aprovacao": "⚠️ ТРЕБУЕТСЯ ОДОБРЕНИЕ",
+        "aprovas": "Одобряете?",
+        "sim": "Да, выполнить",
+        "nao": "Нет, заблокировать",
+        "usage": "📊 Использование (5M)",
+        "fila": "⚠️ Сервер переполнен! В очереди {n} человек.",
+        "modelo": "Модель",
+        "tokens": "Использовано токенов",
+        "restantes": "Осталось",
+        "texto_termos": "1. Принятие: Используя CLI, вы соглашаетесь с этими условиями.\n2. Конфиденциальность: История хранится локально. Ключи на сервере.\n3. Использование: Вы несете ответственность за сгенерированный код. Опасные команды будут заблокированы.\n4. Очередь: У сервера есть ограничения. Злоупотребление приведет к бану."
+    }
 }
 
 def obter_idioma_sistema():
@@ -99,7 +217,7 @@ def t(chave, **kwargs):
     texto = TRADUCOES.get(IDIOMA_ATUAL, TRADUCOES["pt_PT"]).get(chave, chave)
     return texto.format(**kwargs) if kwargs else texto
 
-# --- CLIENTE HTTP ---
+# --- CLIENTE HTTP PROFISSIONAL ---
 http_session = requests.Session()
 retry_strategy = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504], allowed_methods=["POST", "GET"])
 adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=10, pool_maxsize=10)
@@ -109,7 +227,7 @@ http_session.mount("http://", adapter)
 def limpar_tela():
     os.system('clear' if os.name == 'posix' else 'cls')
 
-# --- LOGIN GITHUB ---
+# --- LOGIN GITHUB (DEVICE FLOW) ---
 def verificar_login():
     return os.path.exists(GITHUB_TOKEN_FILE)
 
@@ -178,7 +296,7 @@ def obter_username_local():
         with open(GITHUB_USER_FILE, "r") as f: return f.read().strip()
     return "Developer"
 
-# --- RESTO DO CÓDIGO (Mantido igual) ---
+# --- RESTO DAS FUNÇÕES ---
 def verificar_atualizacao():
     try:
         res = http_session.get(f"{SERVER_URL}/api/version", timeout=(3, 10))
@@ -535,7 +653,7 @@ def main():
                 session_id, mensagens = menu_sessoes(session_id, mensagens)
                 salvar_sessao(session_id, mensagens); limpar_tela(); continue
             elif cmd == "/clear": limpar_tela(); continue
-            elif cmd in ["sair", "exit", "quit", "退出", "終了", "выход"]: break
+            elif cmd in ["sair", "exit", "quit", "退出", "終了", "выход", "blyat"]: break
             elif not prompt.strip(): continue
             
             if USAGE_DATA.get("requests", 0) % 5 == 0 and USAGE_DATA.get("requests", 0) > 0:
