@@ -20,7 +20,7 @@ custom_style = Style([
     ('highlighted', 'fg:#00ff00 bold'), ('selected', 'fg:#00ff00')
 ])
 
-VERSAO_LOCAL = "12.0.0"
+VERSAO_LOCAL = "14.5.0"
 INSTALL_URL = "https://raw.githubusercontent.com/afonsomiguelito13-collab/TinyCLI/main/public/install.sh"
 
 SERVER_URL = os.environ.get("TINY_SERVER_URL", "https://tinycli.onrender.com")
@@ -33,25 +33,19 @@ CONFIG_FILE = os.path.expanduser("~/.local/share/.tinycli_config.json")
 MODELOS_DISPONIVEIS = [
     "deepseek-v4.1", 
     "deepseek-v4-flash", 
-    "gemini-3.8-flash", 
-    "agnes-3.0-flash",
-    "jev-1.13",
+    "agnes-3.0-flash", 
     "gpt-6-luna",
-    "space-bunny",
-    "longcat-2.5"
+    "gemini-3.8-flash"
 ]
 MODELO_ATUAL = MODELOS_DISPONIVEIS[0]
-LIMITE_SEMANAL = 5000000 # 5 Milhões
+LIMITE_SEMANAL = 5000000
 
 CUSTO_MODELO = {
-    "deepseek-v4.1": 3,
-    "deepseek-v4-flash": 3,
-    "gemini-3.8-flash": 4,
-    "agnes-3.0-flash": 3,
-    "jev-1.13": 1,
+    "deepseek-v4.1": 3, 
+    "deepseek-v4-flash": 3, 
+    "agnes-3.0-flash": 3, 
     "gpt-6-luna": 8,
-    "space-bunny": 1,
-    "longcat-2.5": 1
+    "gemini-3.8-flash": 4
 }
 
 http_session = requests.Session()
@@ -69,19 +63,10 @@ def verificar_atualizacao():
         if res.status_code == 200:
             versao_servidor = res.json().get("version", VERSAO_LOCAL)
             if versao_servidor != VERSAO_LOCAL:
-                console.print(Panel(
-                    f"[bold yellow]🚀 Nova Atualização Disponível![/bold yellow]\n"
-                    f"Versão Local: {VERSAO_LOCAL} | Nova Versão: {versao_servidor}\n\n"
-                    f"Queres atualizar agora?",
-                    border_style="yellow"
-                ))
-                if questionary.confirm("Atualizar?").ask():
-                    console.print("[cyan]A baixar a atualização...[/cyan]")
+                if questionary.confirm(f"Nova versão {versao_servidor} disponível. Atualizar?").ask():
                     subprocess.run(f"curl -sL {INSTALL_URL} | bash", shell=True)
-                    console.print("[green]✅ Atualização concluída! Reinicia o Tiny CLI.[/green]")
                     sys.exit(0)
-    except Exception:
-        pass
+    except: pass
 
 def carregar_config():
     if os.path.exists(CONFIG_FILE):
@@ -97,54 +82,44 @@ def salvar_config(diretorio):
 def escolher_pasta_inicial():
     config = carregar_config()
     pasta_padrao = config.get("last_dir", os.getcwd())
-    
-    limpar_tela()
     console.print(Panel("[bold cyan]📁 Onde queres trabalhar hoje?[/bold cyan]", border_style="cyan"))
-    
     opcoes = [f"Usar a pasta atual: {pasta_padrao}", "Escolher outra pasta (navegar)", "Usar a Home (~)"]
     escolha = questionary.select("Seleciona uma opção:", choices=opcoes, style=custom_style).ask()
-    
     if escolha == "Usar a Home (~)": pasta_final = os.path.expanduser("~")
     elif escolha == "Escolher outra pasta (navegar)":
-        pasta_final = questionary.path("Caminho da pasta:", default=pasta_padrao, style=custom_style).ask()
-        if not pasta_final or not os.path.isdir(pasta_final):
-            pasta_final = os.getcwd()
+        pasta_final = questionary.path("Caminho:", default=pasta_padrao, style=custom_style).ask()
+        if not pasta_final or not os.path.isdir(pasta_final): pasta_final = os.getcwd()
     else: pasta_final = pasta_padrao
-
     os.chdir(pasta_final)
     salvar_config(pasta_final)
     time.sleep(1)
 
-def pedir_aprovacao_comando(cmd):
-    console.print(Panel(f"[bold yellow]O Agente quer executar:[/bold yellow]\n\n[bold white]{cmd}[/bold white]", border_style="yellow", title="⚠️ APROVAÇÃO NECESSÁRIA"))
-    return questionary.select("Aprovas?", choices=["Sim, executar", "Não, bloquear"], style=custom_style).ask() == "Sim, executar"
-
-def verificar_comando_perigoso(cmd):
-    return any(p in cmd.lower() for p in ["rm -rf", "reboot", "mkfs", "dd if=", "flash"])
-
-def mostrar_ban_aviso():
-    console.print(Panel("[bold red]⚠️ VIOLAÇÃO DOS TERMOS DE SERVIÇO DETECTADA ⚠️[/bold red]\n\n[bold white]You will lose everything.[/bold white]", border_style="red", title="🚫 BAN"))
-
+# --- TERMOS LONGOS (O CONTRATO DA OPENFUN) ---
 def aceitar_termos():
     limpar_tela()
     texto_termos = (
-        "[bold white]TERMOS DE SERVIÇO E POLÍTICA DE PRIVACIDADE - TINY CLOUD CLI[/bold white]\n\n"
+        "[bold white]TERMOS DE SERVIÇO E POLÍTICA DE PRIVACIDADE - TINY CLOUD CLI v14.5[/bold white]\n\n"
         "[bold yellow]1. Aceitação dos Termos[/bold yellow]\n"
-        "Ao aceder ou utilizar o Tiny Cloud CLI (\"Serviço\"), concordas em ficar vinculado a estes Termos.\n\n"
+        "Ao aceder ou utilizar o Tiny Cloud CLI (\"Serviço\"), concordas em ficar vinculado a estes Termos. Se não concordares, não deves utilizar o Serviço.\n\n"
         "[bold yellow]2. Descrição do Serviço[/bold yellow]\n"
-        "O Tiny Cloud CLI é uma ferramenta que permite a interação com Modelos de Linguagem (LLMs) de terceiros. O Serviço é fornecido \"como está\".\n\n"
-        "[bold yellow]3. Privacidade e Dados[/bold yellow]\n"
-        "O Tiny Cloud CLI não armazena os teus prompts nos servidores do backend. Todo o histórico é guardado localmente no teu dispositivo. As chaves de API são mantidas em segurança.\n\n"
+        "O Tiny Cloud CLI é uma ferramenta de linha de comando que permite a interação com Modelos de Linguagem (LLMs) de terceiros para a geração de código e execução de comandos locais. O Serviço é fornecido \"como está\".\n\n"
+        "[bold yellow]3. Privacidade e Dados (A VERDADE)[/bold yellow]\n"
+        "O Tiny Cloud CLI NÃO armazena os teus prompts ou conversas nos servidores do backend. Todo o histórico é guardado localmente no teu dispositivo. As chaves de API são mantidas em segurança no servidor (Render).\n"
+        "[bold red]AVISO IMPORTANTE:[/bold red] Os modelos de IA gratuitos (DeepSeek, Gemini Free, etc.) UTILIZAM os teus dados para treinar os modelos por padrão. Se estiveres a trabalhar com dados sensíveis, NÃO uses estes modelos. A Openfun não se responsabiliza pelo uso indevido de dados por parte dos provedores de IA.\n\n"
         "[bold yellow]4. Responsabilidade e Uso Aceitável[/bold yellow]\n"
-        "És o único responsável pelo código gerado. O abuso do sistema (Rate Limit) resultará em banimento.\n"
+        "És o único responsável pelo código gerado e pelos comandos que aprovares para execução. É estritamente proibido utilizar o Serviço para atividades ilegais, distribuição de malware ou tentativas de contornar os sistemas de segurança e limites de uso (Rate Limit e Fila). O abuso resultará em banimento permanente.\n\n"
+        "[bold yellow]5. Limitação de Responsabilidade[/bold yellow]\n"
+        "A Openfun não se responsabiliza por quaisquer danos diretos ou indiretos causados pelo uso do Serviço.\n"
     )
+    console.print(Panel(texto_termos[:1500] + "\n\n[dim]... (texto truncado)[/dim]", title="📜 Termos e Privacidade", border_style="yellow"))
     
-    console.print(Panel(texto_termos, title="📜 Termos e Privacidade", border_style="yellow"))
+    escolha = questionary.select("Ler mais ou aceitar?", choices=["1. Ler o texto completo", "2. Aceitar e continuar", "3. Sair"], style=custom_style).ask()
     
-    escolha = questionary.select("Aceitas os Termos de Serviço?", choices=["Sim, eu aceito", "Não, sair"], style=custom_style).ask()
-    
-    if escolha == "Não, sair":
-        console.print("[red]❌ Termos não aceites. A encerrar...[/red]")
+    if escolha == "1. Ler o texto completo":
+        limpar_tela()
+        console.print(Panel(texto_termos, title="📜 Termos Completos", border_style="yellow"))
+        return aceitar_termos()
+    elif escolha == "3. Sair":
         sys.exit(0)
     return True
 
@@ -160,8 +135,7 @@ def carregar_sessao(session_id):
 
 def salvar_sessao(session_id, mensagens):
     os.makedirs(SESSIONS_DIR, exist_ok=True)
-    with open(os.path.join(SESSIONS_DIR, f"{session_id}.json"), "w") as f:
-        json.dump(mensagens, f)
+    with open(os.path.join(SESSIONS_DIR, f"{session_id}.json"), "w") as f: json.dump(mensagens, f)
 
 def carregar_usage():
     os.makedirs(os.path.dirname(USAGE_FILE), exist_ok=True)
@@ -169,8 +143,7 @@ def carregar_usage():
         try:
             with open(USAGE_FILE, "r") as f:
                 data = json.load(f)
-                data.setdefault("requests", 0)
-                data.setdefault("tokens_usados", 0)
+                data.setdefault("requests", 0); data.setdefault("tokens_usados", 0)
                 return data
         except: pass
     return {"requests": 0, "tokens_usados": 0}
@@ -197,71 +170,46 @@ def chamar_ia(mensagens):
     USAGE_DATA["requests"] += 1
     api_url = f"{SERVER_URL}/api/chat"
     health_url = f"{SERVER_URL}/api/version"
+    data = {"messages": mensagens, "model": MODELO_ATUAL}
     
     # Acordar o Render
-    max_tentativas = 5
-    acordou = False
-    for tentativa in range(max_tentativas):
+    for tentativa in range(5):
         try:
             res = http_session.get(health_url, timeout=(5, 10))
-            if res.status_code == 200:
-                acordou = True
-                break
-        except Exception:
-            pass
-        with console.status(f"[bold yellow]⏳ A ligar ao servidor... (Tentativa {tentativa+1}/{max_tentativas})[/bold yellow]", spinner="bouncingBall"):
+            if res.status_code == 200: break
+        except: pass
+        with console.status(f"[yellow]⏳ A ligar ao servidor... Tentativa {tentativa+1}/5[/yellow]", spinner="bouncingBall"):
             time.sleep(2)
-
-    if not acordou:
-        return "ERRO: O servidor demorou muito a acordar. Tenta de novo daqui a pouco."
-
-    # --- FALLBACK NO CLIENTE ---
-    modelos_fallback = ["deepseek-v4.1", "deepseek-v4-flash"]
-    
-    for modelo_tentativa in [MODELO_ATUAL] + modelos_fallback:
+            
+    try:
+        # Verifica o status da fila antes de enviar
         try:
-            if modelo_tentativa != MODELO_ATUAL:
-                console.print(f"[yellow]⚠️ {MODELO_ATUAL} falhou (instável). A tentar fallback para {modelo_tentativa}...[/yellow]")
+            status_res = http_session.get(f"{SERVER_URL}/api/status", timeout=3)
+            if status_res.status_code == 200:
+                status = status_res.json()
+                if status.get("na_fila", 0) > 0:
+                    console.print(f"[yellow]⚠️ Servidor cheio! Há {status['na_fila']} pessoas na fila. O teu pedido pode demorar.[/yellow]")
+        except: pass
+
+        response = http_session.post(api_url, json=data, timeout=(10, 120))
+        
+        if response.status_code == 429:
+            return "ERRO 429: CALMA LÁ! Abusaste do rate limit."
             
-            data_pedido = {"messages": mensagens, "model": modelo_tentativa}
-            response = http_session.post(api_url, json=data_pedido, timeout=(10, 90))
-            
-            if response.status_code == 429:
-                return "ERRO 429: CALMA LÁ! Abusaste do rate limit. Fica 15 minutos de castigo."
-                
-            # Se o modelo experimental falhar, tenta o próximo
-            if response.status_code == 503 and modelo_tentativa == MODELO_ATUAL:
-                continue
-                
-            response.raise_for_status()
-            dados = response.json()
-            
-            tokens_reais = dados.get("usage", {}).get("total_tokens", 0)
-            multiplicador = CUSTO_MODELO.get(modelo_tentativa, 1)
-            USAGE_DATA["tokens_usados"] += (tokens_reais * multiplicador)
-            salvar_usage(USAGE_DATA)
-            
-            if modelo_tentativa != MODELO_ATUAL:
-                MODELO_ATUAL = modelo_tentativa
-                
-            return dados["choices"][0]["message"]["content"]
-            
-        except requests.exceptions.Timeout:
-            if modelo_tentativa == MODELO_ATUAL: continue
-            return "ERRO DE TIMEOUT: O servidor demorou muito a responder."
-        except requests.exceptions.ConnectionError:
-            if modelo_tentativa == MODELO_ATUAL: continue
-            return "ERRO DE CONEXÃO: Verifica a internet."
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 503 and modelo_tentativa == MODELO_ATUAL: continue
-            if e.response.status_code == 404:
-                return "ERRO 404: Rota não encontrada. O servidor no Render pode estar com o código antigo."
-            return f"ERRO HTTP ({e.response.status_code}): {e.response.reason}"
-        except Exception as e:
-            if modelo_tentativa == MODELO_ATUAL: continue
-            return f"ERRO INESPERADO: {e}"
-    
-    return "ERRO: Todos os modelos falharam. Tenta outro modelo no /models."
+        response.raise_for_status()
+        dados = response.json()
+        
+        tokens_reais = dados.get("usage", {}).get("total_tokens", 0)
+        multiplicador = CUSTO_MODELO.get(MODELO_ATUAL, 1)
+        USAGE_DATA["tokens_usados"] += (tokens_reais * multiplicador)
+        salvar_usage(USAGE_DATA)
+        
+        return dados["choices"][0]["message"]["content"]
+        
+    except requests.exceptions.Timeout:
+        return "ERRO DE TIMEOUT: O servidor demorou muito (fila cheia?)."
+    except Exception as e:
+        return f"ERRO: {e}"
 
 def executar_ferramenta(resposta):
     try:
@@ -298,15 +246,13 @@ def executar_ferramenta(resposta):
                 cmd = acao.get("command")
                 if verificar_comando_perigoso(cmd):
                     mostrar_ban_aviso()
-                    return "ACÇÃO BLOQUEADA PELO SISTEMA DE BAN.", False, pensamento
+                    return "ACÇÃO BLOQUEADA.", False, pensamento
                 if not pedir_aprovacao_comando(cmd):
-                    return "O utilizador NEGOU a execução do comando.", False, pensamento
-
+                    return "O utilizador NEGOU.", False, pensamento
                 with console.status(f"[bold yellow]⚙️ Executando:[/bold yellow] {cmd}", spinner="dots"):
                     res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
                 saida = (res.stdout + res.stderr).strip()
-                if res.returncode != 0: return f"Erro:\n{saida}", True, pensamento
-                return (saida or "Comando executado."), False, pensamento
+                return (saida or "Comando executado."), (res.returncode != 0), pensamento
                 
             elif ferramenta == "create_file":
                 path, content = acao.get("path"), acao.get("content")
@@ -320,14 +266,13 @@ def executar_ferramenta(resposta):
 
             elif ferramenta == "run_code":
                 code = acao.get("code")
-                console.print(Panel(f"[bold yellow]🐍 O Agente quer executar Python:[/bold yellow]\n{code}", border_style="yellow"))
+                console.print(Panel(f"[bold yellow]🐍 Executando Python:[/bold yellow]\n{code}", border_style="yellow"))
                 if not questionary.confirm("Aprovas?").ask():
-                    return "O utilizador NEGOU a execução do código.", False, pensamento
+                    return "O utilizador NEGOU.", False, pensamento
                 with console.status("[bold yellow]🐍 Executando...[/bold yellow]", spinner="dots"):
                     res = subprocess.run(["python3", "-c", code], capture_output=True, text=True)
                 saida = (res.stdout + res.stderr).strip()
-                if res.returncode != 0: return f"Erro no código:\n{saida}", True, pensamento
-                return (saida or "Código executado."), False, pensamento
+                return (saida or "Código executado."), (res.returncode != 0), pensamento
         return None, False, pensamento
     except json.JSONDecodeError:
         return None, False, ""
@@ -357,26 +302,18 @@ def mostrar_usage():
         f"[bold]Tokens Usados:[/bold] {usados} / {LIMITE_SEMANAL}\n"
         f"[{cor}]{barra}[/{cor}] {percent:.2f}%\n"
         f"[bold yellow]Restantes:[/bold yellow] {restantes}", 
-        title="📊 Usage (5M)", 
-        border_style="blue"
+        title="📊 Usage (5M)", border_style="blue"
     ))
 
 def menu_sessoes(sessao_atual, mensagens_atuais):
     sessoes = listar_sessoes()
     opcoes = ["Nova Sessão"] + [f"Carregar: {s}" for s in sessoes]
     escolha = questionary.select("Sessões:", choices=opcoes, style=custom_style).ask()
-    
-    if escolha == "Nova Sessão": 
-        try:
-            with open(os.path.expanduser("~/.tinycli/SKILLS.md"), "r", encoding="utf-8") as f: skill = f.read()
-        except: skill = "Você é o Tiny CLI."
-        return str(uuid.uuid4())[:8], [{"role": "system", "content": skill}]
-        
+    if escolha == "Nova Sessão": return str(uuid.uuid4())[:8], []
     elif escolha and escolha.startswith("Carregar:"):
         sid = escolha.replace("Carregar: ", "")
         msgs = carregar_sessao(sid)
-        if msgs: 
-            return sid, msgs
+        if msgs: return sid, msgs
     return sessao_atual, mensagens_atuais
 
 def menu_models():
@@ -385,21 +322,8 @@ def menu_models():
     if escolha:
         MODELO_ATUAL = escolha
         multiplicador = CUSTO_MODELO.get(MODELO_ATUAL, 1)
-        
-        if MODELO_ATUAL == "longcat-2.5":
-            console.print(Panel(
-                "[bold yellow]⚠️ Modelo Experimental[/bold yellow]\n"
-                "O LongCat 2.5 é um preview gratuito. Se ele falhar, o sistema troca automaticamente para o DeepSeek.",
-                border_style="yellow", title="🐱 Meituan"
-            ))
-        elif multiplicador >= 6:
-            console.print(Panel(
-                f"[bold yellow]🚀 Upgrade Sugerido![/bold yellow]\n\n"
-                f"O modelo [bold]{MODELO_ATUAL}[/bold] consome [bold]{multiplicador}x[/bold] mais a tua cota.\n"
-                f"Para uso intensivo sem limites, considera o [bold cyan]Tiny CLI Go[/bold cyan].\n"
-                f"Por agora, o modelo [green]DeepSeek V4.1[/green] é a tua melhor opção gratuita.",
-                border_style="yellow", title="💡 Dica"
-            ))
+        if multiplicador >= 6:
+            console.print(Panel(f"[yellow]⚠️ AVISO: O {MODELO_ATUAL} consome {multiplicador}x mais cota![/yellow]", border_style="yellow"))
         else:
             console.print(f"[green]✅ Modelo: {MODELO_ATUAL} (Custo: {multiplicador}x)[/green]")
 
@@ -414,9 +338,7 @@ def barra_status(session_id):
 def main():
     global MODELO_ATUAL
     limpar_tela()
-    
     verificar_atualizacao()
-
     os.makedirs(os.path.dirname(TERMOS_FILE), exist_ok=True)
     if not os.path.exists(TERMOS_FILE):
         if aceitar_termos():
@@ -424,8 +346,7 @@ def main():
             limpar_tela()
     
     escolher_pasta_inicial()
-    
-    console.print(Panel(f"[bold green]{gerar_banner()}[/bold green]\n[dim]v{VERSAO_LOCAL} - Model Pool Edition[/dim]", border_style="green", title="🦁 Tiny Cloud CLI"))
+    console.print(Panel(f"[bold green]{gerar_banner()}[/bold green]\n[dim]v{VERSAO_LOCAL} - Fila Edition[/dim]", border_style="green", title="🦁 Tiny Cloud CLI"))
     
     session_id = str(uuid.uuid4())[:8]
     try:
@@ -445,32 +366,14 @@ def main():
             elif cmd == "/models": menu_models(); continue
             elif cmd == "/session":
                 session_id, mensagens = menu_sessoes(session_id, mensagens)
-                salvar_sessao(session_id, mensagens)
-                limpar_tela()
-                
-                # Mostra o histórico carregado
-                if len(mensagens) > 1:
-                    console.print(Panel("[bold cyan]Histórico Carregado:[/bold cyan]", border_style="cyan"))
-                    for msg in mensagens:
-                        if msg["role"] == "user":
-                            console.print(f"[bold blue]👤 Tu:[/bold blue] {msg['content']}")
-                        elif msg["role"] == "assistant":
-                            console.print(f"[bold green]🤖 Tiny:[/bold green] {msg['content']}")
-                    console.print()
-                continue
+                salvar_sessao(session_id, mensagens); limpar_tela(); continue
             elif cmd == "/clear": limpar_tela(); continue
             elif cmd in ["sair", "exit"]: break
             elif not prompt.strip(): continue
             
-            # O SOFT NUDGE OCULTO (A cada 5 pedidos)
+            # O SOFT NUDGE
             if USAGE_DATA.get("requests", 0) % 5 == 0 and USAGE_DATA.get("requests", 0) > 0:
-                console.print(Panel(
-                    "[bold cyan]💡 Sabias?[/bold cyan]\n"
-                    "Os utilizadores do plano Free têm limites. Se precisares de mais potência, "
-                    "o [bold]Tiny CLI Go[/bold] está a chegar para remover os limites e dar acesso prioritário ao GPT-6 Luna.\n"
-                    "[dim]Continua a usar o Free por agora. Estás a ir muito bem![/dim]",
-                    border_style="cyan", title="🚀 Upgrade"
-                ))
+                console.print(Panel("[bold cyan]💡 Sabias?[/bold cyan]\nO plano Free tem limites. O Tiny CLI Go remove as filas e dá acesso prioritário!", border_style="cyan", title="🚀 Upgrade"))
 
             mensagens.append({"role": "user", "content": prompt})
             
@@ -484,7 +387,7 @@ def main():
                 
                 if resultado:
                     if deu_erro:
-                        mensagens.append({"role": "user", "content": f"Erro:\n{resultado}\nCorrige e tenta de novo."})
+                        mensagens.append({"role": "user", "content": f"Erro:\n{resultado}\nCorrige."})
                         tentativas += 1
                         time.sleep(1)
                         limpar_tela()
