@@ -20,7 +20,7 @@ custom_style = Style([
     ('highlighted', 'fg:#00ff00 bold'), ('selected', 'fg:#00ff00')
 ])
 
-VERSAO_LOCAL = "15.0.0"
+VERSAO_LOCAL = "16.0.0"
 INSTALL_URL = "https://raw.githubusercontent.com/afonsomiguelito13-collab/TinyCLI/main/public/install.sh"
 
 SERVER_URL = os.environ.get("TINY_SERVER_URL", "https://tinycli.onrender.com")
@@ -31,6 +31,7 @@ TERMOS_FILE = os.path.expanduser("~/.local/share/.tinycli_terms.json")
 CONFIG_FILE = os.path.expanduser("~/.local/share/.tinycli_config.json")
 
 MODELOS_DISPONIVEIS = [
+    "agent-1.0",
     "deepseek-v4.1", 
     "deepseek-v4-flash", 
     "agnes-3.0-flash", 
@@ -41,6 +42,7 @@ MODELO_ATUAL = MODELOS_DISPONIVEIS[0]
 LIMITE_SEMANAL = 5000000
 
 CUSTO_MODELO = {
+    "agent-1.0": 6, # Custo combinado (DeepSeek + Agnes)
     "deepseek-v4.1": 3, 
     "deepseek-v4-flash": 3, 
     "agnes-3.0-flash": 3, 
@@ -363,6 +365,65 @@ def chamar_ia(mensagens):
     except Exception as e:
         return f"ERRO: {e}"
 
+# --- AGENT 1.0 (A EQUIPA) ---
+def chamar_agent_1_0(mensagens_usuario):
+    global MODELO_ATUAL
+    
+    console.print(Panel("[bold cyan]🤖 Agent 1.0 Ativado[/bold cyan]\nProgramador (DeepSeek) + Revisor (Agnes)", border_style="cyan"))
+    
+    modelo_original = MODELO_ATUAL
+    
+    # 1. O Programador
+    console.print("[dim]👨‍💻 O Programador (DeepSeek) está a escrever o código...[/dim]")
+    mensagens_programador = mensagens_usuario + [
+        {"role": "system", "content": "Você é o Programador. Escreva o código completo e funcional para o pedido. Retorne APENAS o código, sem explicações."}
+    ]
+    MODELO_ATUAL = "deepseek-v4-flash"
+    codigo_inicial = chamar_ia(mensagens_programador)
+    
+    if codigo_inicial.startswith("ERRO"):
+        MODELO_ATUAL = modelo_original
+        return f"ERRO no Programador: {codigo_inicial}"
+
+    # 2. O Revisor
+    console.print("[dim]🧐 O Revisor (Agnes) está a analisar o código...[/dim]")
+    mensagens_revisor = [
+        {"role": "system", "content": "Você é o Revisor. Analise o código abaixo. Se estiver correto, responda APENAS 'APROVADO'. Se tiver bugs, explique o erro e sugira a correção."},
+        {"role": "user", "content": f"O utilizador pediu: {mensagens_usuario[-1]['content']}\n\nO Programador escreveu:\n{codigo_inicial}"}
+    ]
+    MODELO_ATUAL = "agnes-3.0-flash"
+    feedback_revisor = chamar_ia(mensagens_revisor)
+
+    # 3. Correção (se necessário)
+    if "APROVADO" not in feedback_revisor.upper():
+        console.print("[dim]🔄 O Revisor encontrou erros. O Programador está a corrigir...[/dim]")
+        mensagens_correcao = mensagens_usuario + [
+            {"role": "system", "content": "Você é o Programador. Corrija o código abaixo com base no feedback do Revisor. Retorne APENAS o código corrigido."},
+            {"role": "user", "content": f"Código original:\n{codigo_inicial}\n\nFeedback do Revisor:\n{feedback_revisor}"}
+        ]
+        MODELO_ATUAL = "deepseek-v4-flash"
+        codigo_final = chamar_ia(mensagens_correcao)
+    else:
+        console.print("[green]✅ O Revisor aprovou o código![/green]")
+        codigo_final = codigo_inicial
+
+    MODELO_ATUAL = modelo_original
+    
+    # Extrai o JSON de ferramenta
+    if "```json" in codigo_final: 
+        json_part = codigo_final.split("```json")[1].split("```")[0]
+    elif "```" in codigo_final:
+        json_part = codigo_final.split("```")[1].split("```")[0]
+    else:
+        json_part = codigo_final
+        
+    try:
+        acao = json.loads(json_part.strip())
+        return json.dumps(acao)
+    except:
+        # Se não for JSON, cria um ficheiro com o código
+        return json.dumps({"tool": "create_file", "path": "agent_output.py", "content": codigo_final})
+
 def executar_ferramenta(resposta):
     try:
         pensamento = ""
@@ -484,7 +545,9 @@ def menu_models():
     if escolha:
         MODELO_ATUAL = escolha
         multiplicador = CUSTO_MODELO.get(MODELO_ATUAL, 1)
-        if multiplicador >= 6:
+        if MODELO_ATUAL == "agent-1.0":
+            console.print(Panel("[bold cyan]🤖 Agent 1.0: DeepSeek (Programador) + Agnes (Revisor)[/bold cyan]\nCusto: 6x", border_style="cyan"))
+        elif multiplicador >= 6:
             console.print(Panel(f"[yellow]⚠️ AVISO: O {MODELO_ATUAL} consome {multiplicador}x mais cota![/yellow]", border_style="yellow"))
         else:
             console.print(f"[green]✅ Modelo: {MODELO_ATUAL} (Custo: {multiplicador}x)[/green]")
@@ -508,7 +571,7 @@ def main():
             limpar_tela()
     
     escolher_pasta_inicial()
-    console.print(Panel(f"[bold green]{gerar_banner()}[/bold green]\n[dim]v{VERSAO_LOCAL} - Multi-Language[/dim]", border_style="green", title=f"🦁 {t('bem_vindo')}"))
+    console.print(Panel(f"[bold green]{gerar_banner()}[/bold green]\n[dim]v{VERSAO_LOCAL} - Agent 1.0[/dim]", border_style="green", title=f"🦁 {t('bem_vindo')}"))
     
     session_id = str(uuid.uuid4())[:8]
     try:
@@ -542,8 +605,12 @@ def main():
             
             tentativas = 0
             while tentativas < 5:
-                with console.status(t("pensando"), spinner="bouncingBar"):
-                    resposta = chamar_ia(mensagens)
+                if MODELO_ATUAL == "agent-1.0":
+                    resposta = chamar_agent_1_0(mensagens)
+                else:
+                    with console.status(t("pensando"), spinner="bouncingBar"):
+                        resposta = chamar_ia(mensagens)
+                        
                 mensagens.append({"role": "assistant", "content": resposta})
                 
                 resultado, deu_erro, pensamento = executar_ferramenta(resposta)
