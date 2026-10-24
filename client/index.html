@@ -3,363 +3,280 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TinyCLI Web</title>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <title>Tiny CLI</title>
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/iconoir@7.7.0/css/iconoir.css">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Merriweather:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 
         :root {
-            --bg-main: #1e1e1e;
-            --bg-sidebar: #252526;
-            --bg-dropdown: #2d2d30;
-            --text-main: #cccccc;
-            --text-muted: #888888;
-            --border-color: #3e3e42;
-            --input-bg: #1e1e1e;
-            --font-ui: 'Inter', -apple-system, sans-serif;
-            --font-serif: 'Merriweather', Georgia, serif;
-            
+            --bg-main: #121212; --bg-surface: #1e1e1e; --bg-hover: #2a2a2a;
+            --text-primary: #f3f3f3; --text-secondary: #a1a1aa; --border-color: #333333;
+            --accent: #ffffff;
+            --font-stack: 'Inter', sans-serif;
+            --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
             --sidebar-width: 280px;
-            
-            /* Transição suave e natural (substitui a mola exagerada) */
-            --ease-out-natural: cubic-bezier(0.25, 1, 0.5, 1);
-            --ease-drawer: cubic-bezier(0.16, 1, 0.3, 1);
         }
         
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font-ui); -webkit-tap-highlight-color: transparent; }
-        body { background-color: var(--bg-main); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; }
-        
-        /* --- TOP BAR --- */
-        #top-bar { 
-            position: absolute; top: 0; left: 0; right: 0; height: 70px;
-            display: flex; align-items: center; justify-content: space-between; 
-            padding: 0 15px; z-index: 100; background: var(--bg-main);
+        body.light-theme {
+            --bg-main: #f9f9f9; --bg-surface: #ffffff; --bg-hover: #f0f0f0;
+            --text-primary: #1a1a1a; --text-secondary: #6b6b6b; --border-color: #e5e5e5;
+            --accent: #2d2d2d;
         }
-        
-        /* Menu Esquerdo (|||) */
-        .left-header-container {
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            cursor: pointer; padding: 8px 10px; border-radius: 8px; transition: background 0.2s;
-        }
-        .left-header-container:hover { background: var(--bg-sidebar); }
-        
-        .menu-icon { display: flex; flex-direction: column; gap: 4px; justify-content: center; align-items: center; width: 20px; height: 20px;}
-        .menu-icon span { display: block; width: 18px; height: 2px; background-color: #fff; border-radius: 2px; transition: transform 0.3s var(--ease-out-natural); }
 
-        /* Seletor Central */
-        .model-selector-container { position: relative; display: flex; justify-content: center; }
-        .model-btn { 
-            display: flex; align-items: center; gap: 6px; font-size: 1.05rem; font-weight: 500; 
-            color: #fff; cursor: pointer; padding: 8px 16px; border-radius: 20px;
-            background: transparent; border: none; font-family: var(--font-ui);
-            transition: background 0.2s;
-        }
-        .model-btn:hover { background: var(--bg-sidebar); }
-        .model-btn i { width: 16px; height: 16px; color: var(--text-muted); transition: transform 0.3s var(--ease-out-natural);}
-        .model-btn.open i { transform: rotate(180deg); }
-
-        /* --- DROPDOWN (ANIMAÇÃO SUAVE) --- */
-        #model-dropdown {
-            position: absolute; top: 50px; left: 50%;
-            width: 280px;
-            background: var(--bg-dropdown); border: 1px solid var(--border-color);
-            border-radius: 20px; padding: 10px 0;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            transform: translateX(-50%) scaleY(0.95);
-            transform-origin: top center;
-            visibility: hidden;
-            transition: transform 0.2s var(--ease-out-natural), visibility 0.2s;
-            z-index: 200;
-        }
-        #model-dropdown.show { transform: translateX(-50%) scaleY(1); visibility: visible; }
-
-        .dropdown-item { padding: 12px 20px; cursor: pointer; display: flex; align-items: flex-start; gap: 10px; transition: background 0.1s; }
-        .dropdown-item:hover { background: rgba(255,255,255,0.05); }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font-stack); -webkit-tap-highlight-color: transparent; }
+        body { background-color: var(--bg-main); color: var(--text-primary); display: flex; height: 100vh; overflow: hidden; transition: background 0.3s, color 0.3s; }
         
-        .dropdown-item .check-icon { width: 18px; height: 18px; color: #fff; visibility: hidden; margin-top: 3px; transition: transform 0.2s var(--ease-out-natural); }
-        .dropdown-item.active .check-icon { visibility: visible; transform: scale(1); }
-        .dropdown-item .check-icon { transform: scale(0.8); }
-        
-        .item-content { display: flex; flex-direction: column; }
-        .item-title { font-size: 1rem; color: #fff; margin-bottom: 4px; }
-        .item-desc { font-size: 0.85rem; color: var(--text-muted); line-height: 1.3; }
-
-        /* --- SIDEBAR COM ANIMAÇÃO SUAVE --- */
-        #sidebar-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.5); z-index: 90; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+        /* SIDEBAR */
+        #sidebar-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.4); z-index: 150; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
         #sidebar-overlay.open { opacity: 1; pointer-events: auto; }
-        
-        #sidebar { 
-            position: absolute; left: calc(var(--sidebar-width) * -1); top: 0; bottom: 0; width: var(--sidebar-width); 
-            background-color: var(--bg-sidebar); border-right: 1px solid var(--border-color); 
-            display: flex; flex-direction: column; padding: 20px 15px; z-index: 100;
-            transition: transform 0.45s var(--ease-drawer); 
-            box-shadow: 4px 0 24px rgba(0,0,0,0.2);
-            will-change: transform;
-        }
-        
-        #sidebar.dragging { transition: none; }
+        #sidebar { position: absolute; left: calc(var(--sidebar-width) * -1); top: 0; bottom: 0; width: var(--sidebar-width); background: var(--bg-surface); border-right: 1px solid var(--border-color); z-index: 200; display: flex; flex-direction: column; transition: transform 0.3s var(--ease-out), background 0.3s; }
         #sidebar.open { transform: translateX(var(--sidebar-width)); }
-        
-        .sidebar-header { font-size: 1.2rem; font-weight: 600; display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px;}
-        .sidebar-btn { display: flex; align-items: center; gap: 12px; padding: 12px 10px; border-radius: 8px; cursor: pointer; font-size: 0.95rem; transition: background 0.2s; color: var(--text-main);}
-        .sidebar-btn:hover { background-color: #333; }
-        
-        .section-title { font-size: 0.8rem; font-weight: 600; padding: 20px 10px 10px 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-        #chat-list { list-style: none; overflow-y: auto; flex: 1; }
-        #chat-list li { padding: 10px; cursor: pointer; border-radius: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.9rem; color: var(--text-main); transition: background 0.2s;}
-        #chat-list li:hover { background-color: #333; }
+        .sidebar-header { padding: 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); }
+        .sidebar-header h2 { font-size: 1.1rem; font-weight: 600; }
+        .sidebar-header i { cursor: pointer; color: var(--text-secondary); font-size: 20px; }
+        .sidebar-content { flex: 1; overflow-y: auto; padding: 12px; }
+        .new-chat-btn { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: transparent; color: var(--text-primary); font-weight: 500; font-size: 0.9rem; cursor: pointer; transition: background 0.2s; margin-bottom: 16px; }
+        .new-chat-btn:hover { background: var(--bg-hover); }
+        .section-title { font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; padding: 8px; margin-bottom: 4px; }
+        #chat-list { list-style: none; }
+        #chat-list li { padding: 10px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: background 0.2s; display: flex; align-items: center; gap: 8px; color: var(--text-primary);}
+        #chat-list li:hover { background: var(--bg-hover); }
+        .sidebar-footer { padding: 16px; border-top: 1px solid var(--border-color); }
+        .usage-label { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 8px; display: flex; justify-content: space-between; }
+        .usage-bar-bg { width: 100%; height: 6px; background: var(--bg-hover); border-radius: 3px; overflow: hidden; }
+        .usage-bar-fill { height: 100%; background: var(--text-primary); width: 0%; transition: width 0.3s; }
 
-        /* USAGE NO FUNDO DO MENU */
-        .sidebar-footer {
-            padding-top: 15px; border-top: 1px solid var(--border-color);
-            display: flex; flex-direction: column; gap: 5px;
-        }
-        .usage-label { font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;}
-        .usage-bar-bg { width: 100%; height: 6px; background: #111; border-radius: 3px; overflow: hidden; margin-top: 4px;}
-        .usage-bar-fill { height: 100%; background: #007acc; width: 0%; transition: width 0.3s ease;}
-        .usage-text-detail { font-size: 0.8rem; color: #fff; display: flex; justify-content: space-between; margin-top: 4px;}
+        /* TOP BAR */
+        #top-bar { position: absolute; top: 0; left: 0; right: 0; height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; z-index: 100; background: var(--bg-main); border-bottom: 1px solid var(--border-color); transition: background 0.3s, border 0.3s; }
+        .icon-btn { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; cursor: pointer; transition: background 0.2s; color: var(--text-secondary); }
+        .icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .icon-btn i { font-size: 20px; }
+        .model-selector-container { position: relative; display: flex; justify-content: center; }
+        .model-btn { display: flex; align-items: center; gap: 6px; font-size: 0.95rem; font-weight: 500; color: var(--text-primary); cursor: pointer; padding: 6px 12px; border-radius: 8px; background: transparent; border: 1px solid transparent; transition: all 0.2s; }
+        .model-btn:hover { background: var(--bg-hover); border-color: var(--border-color); }
+        .model-btn i { font-size: 16px; color: var(--text-secondary); }
+        #model-dropdown { position: absolute; top: 45px; left: 50%; width: 260px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 12px; padding: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); transform: translateX(-50%) translateY(-5px) scale(0.98); opacity: 0; visibility: hidden; transition: all 0.2s var(--ease-out); z-index: 200; }
+        #model-dropdown.show { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; visibility: visible; }
+        .dropdown-item { padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 10px; border-radius: 8px; transition: background 0.1s; }
+        .dropdown-item:hover { background: var(--bg-hover); }
+        .dropdown-item i { font-size: 18px; color: var(--text-secondary); }
+        .dropdown-item.active i { color: var(--text-primary); }
+        .item-content { display: flex; flex-direction: column; }
+        .item-title { font-size: 0.9rem; color: var(--text-primary); font-weight: 500; }
+        .item-desc { font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px; }
 
-        /* --- MAIN CHAT --- */
+        /* MAIN CHAT */
         #main { flex: 1; display: flex; flex-direction: column; position: relative; width: 100%; height: 100%; }
-        #chat-container { flex: 1; overflow-y: auto; padding: 80px 20px 100px 20px; display: flex; flex-direction: column; gap: 20px; }
-        
-        #welcome-screen { 
-            position: absolute; top: 30%; left: 20px; right: 20px;
-            display: flex; flex-direction: column; align-items: flex-start;
-            transition: transform 0.3s var(--ease-out-natural);
-        }
-        #welcome-screen.hide { transform: translateY(-30px); pointer-events: none; }
-        #welcome-screen h1 { font-size: 2.2rem; font-weight: 400; margin-bottom: 25px; color: #fff; font-family: var(--font-serif); line-height: 1.2;}
-        
-        .welcome-suggestions { display: flex; flex-direction: column; gap: 10px; align-items: flex-start;}
-        .welcome-btn { background: var(--bg-sidebar); border: 1px solid var(--border-color); padding: 10px 18px; border-radius: 20px; font-size: 0.95rem; cursor: pointer; color: var(--text-main); transition: background 0.2s;}
-        .welcome-btn:hover { background: #333; }
-
-        /* --- MENSAGENS --- */
-        @keyframes popIn { 0% { transform: scale(0.95); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-        .message { max-width: 90%; padding: 15px 20px; border-radius: 12px; line-height: 1.6; font-size: 0.95rem; animation: popIn 0.2s var(--ease-out-natural) forwards;}
-        .user { align-self: flex-end; background-color: var(--bg-sidebar); color: #fff; border: 1px solid var(--border-color);}
-        .bot { align-self: flex-start; background-color: transparent; border: none; padding-left: 0;}
-        
+        #chat-container { flex: 1; overflow-y: auto; padding: 80px 20px 120px 20px; display: flex; flex-direction: column; gap: 24px; }
+        #welcome-screen { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; text-align: center; width: 100%; max-width: 600px; padding: 0 20px; transition: opacity 0.3s var(--ease-out); }
+        #welcome-screen.hide { opacity: 0; pointer-events: none; }
+        #welcome-screen h1 { font-size: 2rem; font-weight: 500; margin-bottom: 24px; color: var(--text-primary); letter-spacing: -0.5px;}
+        .welcome-suggestions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;}
+        .welcome-btn { background: var(--bg-surface); border: 1px solid var(--border-color); padding: 8px 16px; border-radius: 20px; font-size: 0.9rem; cursor: pointer; color: var(--text-secondary); transition: all 0.2s; }
+        .welcome-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+        @keyframes fadeIn { 0% { opacity: 0; transform: translateY(4px); } 100% { opacity: 1; transform: translateY(0); } }
+        .message { max-width: 85%; line-height: 1.6; font-size: 0.95rem; animation: fadeIn 0.2s var(--ease-out) forwards; }
+        .user { align-self: flex-end; background-color: var(--bg-surface); color: var(--text-primary); padding: 12px 16px; border-radius: 16px; border-bottom-right-radius: 4px; border: 1px solid var(--border-color); }
+        .bot { align-self: flex-start; background-color: transparent; color: var(--text-primary); padding: 8px 0; padding-left: 4px; }
         .bot p { margin-bottom: 12px; }
-        .bot pre { background: #111; border: 1px solid var(--border-color); padding: 12px; border-radius: 8px; overflow-x: auto; margin-top: 10px;}
+        .bot p:last-child { margin-bottom: 0; }
+        .bot pre { background: var(--bg-surface); border: 1px solid var(--border-color); padding: 16px; border-radius: 12px; overflow-x: auto; margin-top: 12px; font-size: 0.85rem; }
+        .bot code { background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 0.9em; }
 
-        /* --- INPUT AREA --- */
-        footer { position: absolute; bottom: 0; left: 0; right: 0; padding: 15px 20px 25px 20px; background: var(--bg-main); z-index: 50;}
-        .input-wrapper { background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 30px; padding: 10px 15px; display: flex; flex-direction: column; }
-        textarea { border: none; background: transparent; resize: none; outline: none; font-size: 1rem; max-height: 100px; padding: 5px 0 5px 5px; color: #fff; width: 100%; line-height: 1.4; font-family: var(--font-ui);}
-        textarea::placeholder { color: #888; }
-        
-        .input-controls { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; }
-        .add-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px;}
-        .add-btn i { width: 20px; height: 20px; }
-        .send-btn { background-color: var(--text-muted); color: var(--bg-main); border: none; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; opacity: 0.5;}
-        .send-btn i { width: 16px; height: 16px; }
-        .send-btn.active { background-color: #fff; opacity: 1; }
-
+        footer { position: absolute; bottom: 0; left: 0; right: 0; padding: 0 16px 24px 16px; background: linear-gradient(transparent, var(--bg-main) 30%); z-index: 50; display: flex; justify-content: center; transition: background 0.3s;}
+        .input-container { width: 100%; max-width: 768px; display: flex; flex-direction: column; align-items: center; }
+        .input-wrapper { width: 100%; background-color: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 24px; padding: 12px 16px; display: flex; align-items: flex-end; gap: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); transition: border-color 0.2s, background 0.3s;}
+        .input-wrapper:focus-within { border-color: var(--text-secondary); }
+        .input-icon { color: var(--text-secondary); font-size: 20px; padding-bottom: 4px;}
+        textarea { flex: 1; border: none; background: transparent; resize: none; outline: none; font-size: 1rem; max-height: 200px; padding: 4px 0; color: var(--text-primary); line-height: 1.5; font-family: var(--font-stack);}
+        textarea::placeholder { color: var(--text-secondary); }
+        .send-btn { background-color: var(--text-primary); color: var(--bg-main); border: none; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s var(--ease-out); opacity: 0.2; flex-shrink: 0;}
+        .send-btn.active { opacity: 1; }
+        .send-btn i { font-size: 16px; }
+        .footer-text { font-size: 0.75rem; color: var(--text-secondary); margin-top: 12px; text-align: center; }
     </style>
 </head>
 <body>
 
-    <!-- Barra Superior -->
-    <div id="top-bar">
-        <div class="left-header-container" onclick="toggleSidebar()">
-            <div class="menu-icon">
-                <span></span>
-                <span></span>
-                <span></span>
+    <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div id="sidebar">
+        <div class="sidebar-header">
+            <h2>Tiny CLI</h2>
+            <i class="iconoir-x" onclick="toggleSidebar()"></i>
+        </div>
+        <div class="sidebar-content">
+            <button class="new-chat-btn" onclick="newChat()">
+                <i class="iconoir-plus"></i> Nova Conversa
+            </button>
+            <div class="section-title">Histórico</div>
+            <ul id="chat-list"></ul>
+        </div>
+        <div class="sidebar-footer">
+            <div class="usage-label"><span>Usage Semanal</span> <span id="usage-percent">0%</span></div>
+            <div class="usage-bar-bg">
+                <div class="usage-bar-fill" id="usage-bar"></div>
             </div>
+        </div>
+    </div>
+
+    <div id="top-bar">
+        <div class="icon-btn" onclick="toggleSidebar()">
+            <i class="iconoir-menu"></i>
         </div>
         
         <div class="model-selector-container">
             <button class="model-btn" id="model-btn" onclick="toggleDropdown(event)">
                 <span id="current-model-text">DeepSeek</span>
-                <i data-lucide="chevron-down"></i>
+                <i class="iconoir-nav-arrow-down"></i>
             </button>
-            
             <div id="model-dropdown">
                 <div class="dropdown-item active" onclick="selectModel(this)">
-                    <i data-lucide="check" class="check-icon"></i>
-                    <div class="item-content">
-                        <div class="item-title">DeepSeek</div>
-                        <div class="item-desc">V4.1 (Rápido e Lógico)</div>
-                    </div>
+                    <i class="iconoir-cpu"></i>
+                    <div class="item-content"><div class="item-title">DeepSeek</div><div class="item-desc">V4.1</div></div>
                 </div>
                 <div class="dropdown-item" onclick="selectModel(this)">
-                    <i data-lucide="check" class="check-icon"></i>
-                    <div class="item-content">
-                        <div class="item-title">Agnes</div>
-                        <div class="item-desc">3.0 Flash (Ágil)</div>
-                    </div>
+                    <i class="iconoir-flash"></i>
+                    <div class="item-content"><div class="item-title">Agnes</div><div class="item-desc">3.0 Flash</div></div>
                 </div>
                 <div class="dropdown-item" onclick="selectModel(this)">
-                    <i data-lucide="check" class="check-icon"></i>
-                    <div class="item-content">
-                        <div class="item-title">GPT</div>
-                        <div class="item-desc">6 Luna (Análise Profunda)</div>
-                    </div>
+                    <i class="iconoir-brain"></i>
+                    <div class="item-content"><div class="item-title">GPT</div><div class="item-desc">6 Luna</div></div>
                 </div>
                 <div class="dropdown-item" onclick="selectModel(this)">
-                    <i data-lucide="check" class="check-icon"></i>
-                    <div class="item-content">
-                        <div class="item-title">Space</div>
-                        <div class="item-desc">Bunny (Experimental)</div>
-                    </div>
+                    <i class="iconoir-rocket"></i>
+                    <div class="item-content"><div class="item-title">Space</div><div class="item-desc">Bunny</div></div>
                 </div>
             </div>
         </div>
 
-        <div style="width: 40px; display:flex; justify-content:flex-end;">
-            <i data-lucide="shield-check" style="color:#2e7d32; width:20px; height:20px;"></i>
+        <div class="icon-btn" onclick="toggleTheme()">
+            <i class="iconoir-half-moon" id="theme-icon"></i>
         </div>
     </div>
 
-    <!-- Sidebar Overlay -->
-    <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
-
-    <!-- Sidebar -->
-    <div id="sidebar">
-        <div class="sidebar-header">
-            <span>Tiny CLI</span>
-            <i data-lucide="x" onclick="toggleSidebar()" style="cursor:pointer; width:20px;"></i>
-        </div>
-        
-        <div class="sidebar-btn" onclick="newChat()">
-            <i data-lucide="plus-circle"></i> Nova Conversa
-        </div>
-        
-        <div class="section-title">
-            <span>Histórico</span>
-        </div>
-        <ul id="chat-list">
-            <!-- Sessões carregadas aqui -->
-        </ul>
-
-        <!-- O USAGE FICA NO FUNDO DO MENU -->
-        <div class="sidebar-footer">
-            <div class="usage-label">Usage Semanal</div>
-            <div class="usage-bar-bg">
-                <div class="usage-bar-fill" id="usage-bar"></div>
-            </div>
-            <div class="usage-text-detail">
-                <span id="usage-percent">0%</span>
-                <span id="usage-tokens">0 / 5M</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Main Chat -->
     <div id="main" style="touch-action: pan-y;">
-        
         <div id="welcome-screen">
-            <h1>Afonso, como estão as<br>coisas?</h1>
+            <h1>Como posso ajudar hoje?</h1>
             <div class="welcome-suggestions">
-                <div class="welcome-btn" onclick="sendSuggestion('Descobrir diversão')">Descobrir diversão</div>
-                <div class="welcome-btn" onclick="sendSuggestion('Planear comigo')">Planear comigo</div>
-                <div class="welcome-btn" onclick="sendSuggestion('Obter notícias')">Obter notícias</div>
+                <div class="welcome-btn" onclick="sendSuggestion('Criar um script Python')">Criar um script Python</div>
+                <div class="welcome-btn" onclick="sendSuggestion('Explicar um código')">Explicar um código</div>
+                <div class="welcome-btn" onclick="sendSuggestion('Ajuda com Termux')">Ajuda com Termux</div>
             </div>
         </div>
 
         <div id="chat-container"></div>
 
         <footer>
-            <div class="input-wrapper">
-                <textarea id="user-input" rows="1" placeholder="Enviar Mensagem ao Copilot"></textarea>
-                <div class="input-controls">
-                    <button class="add-btn"><i data-lucide="plus"></i></button>
-                    <button class="send-btn" id="send-btn" onclick="sendMessage()"><i data-lucide="arrow-up"></i></button>
+            <div class="input-container">
+                <div class="input-wrapper">
+                    <i class="iconoir-attachment input-icon"></i>
+                    <textarea id="user-input" rows="1" placeholder="Pergunte alguma coisa..."></textarea>
+                    <button class="send-btn" id="send-btn" onclick="sendMessage()"><i class="iconoir-arrow-up"></i></button>
                 </div>
+                <div class="footer-text">O Tiny CLI pode cometer erros. Verifique informações importantes.</div>
             </div>
         </footer>
     </div>
 
     <script>
         marked.setOptions({ gfm: true, breaks: true });
-        lucide.createIcons();
         
-        const API_URL = "http://127.0.0.1:8080"; 
+        const API_URL = window.location.origin; 
         let currentSessionId = "nova_" + Date.now();
         let selectedModel = "deepseek-v4.1";
-        const LIMITE_TOKENS = 5000000; // 5 Milhões
 
         const textarea = document.getElementById('user-input');
         const sendBtn = document.getElementById('send-btn');
         const welcomeScreen = document.getElementById('welcome-screen');
         const chatContainer = document.getElementById('chat-container');
-        const sidebar = document.getElementById('sidebar');
-        const overlay = document.getElementById('sidebar-overlay');
         const dropdown = document.getElementById('model-dropdown');
         const modelBtn = document.getElementById('model-btn');
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebar-overlay');
 
-        // ==========================================
-        // LÓGICA DO MAGNETIC DRAGGING (SIDEBAR)
-        // ==========================================
-        let startX = 0;
-        let currentX = 0;
-        let isDragging = false;
-        const sidebarWidth = 280;
+        // TEMA
+        function toggleTheme() {
+            document.body.classList.toggle('light-theme');
+            const isLight = document.body.classList.contains('light-theme');
+            localStorage.setItem('tiny-theme', isLight ? 'light' : 'dark');
+            document.getElementById('theme-icon').className = isLight ? 'iconoir-sun-light' : 'iconoir-half-moon';
+        }
 
-        document.getElementById('main').addEventListener('pointerdown', (e) => {
-            if (e.clientX < 40 && !sidebar.classList.contains('open') && e.target.tagName !== 'TEXTAREA') {
-                startX = e.clientX;
-                isDragging = true;
-                sidebar.classList.add('dragging');
-            }
-        });
+        if (localStorage.getItem('tiny-theme') === 'light') {
+            document.body.classList.add('light-theme');
+            document.getElementById('theme-icon').className = 'iconoir-sun-light';
+        }
 
-        document.addEventListener('pointermove', (e) => {
-            if (!isDragging) return;
-            currentX = e.clientX;
-            let diff = currentX - startX;
-            
-            if (diff < 0) diff = 0;
-            if (diff > sidebarWidth) diff = sidebarWidth;
-            
-            sidebar.style.transform = `translateX(${diff - sidebarWidth}px)`;
-            overlay.style.opacity = diff / sidebarWidth;
-        });
-
-        document.addEventListener('pointerup', (e) => {
-            if (!isDragging) return;
-            isDragging = false;
-            sidebar.classList.remove('dragging');
-            
-            let diff = currentX - startX;
-            
-            if (diff > sidebarWidth * 0.3) {
-                sidebar.style.transform = ''; 
-                sidebar.classList.add('open');
-                overlay.classList.add('open');
-            } else {
-                sidebar.style.transform = ''; 
-                sidebar.classList.remove('open');
-                overlay.classList.remove('open');
-                overlay.style.opacity = '';
-            }
-        });
-
+        // SIDEBAR
         function toggleSidebar() {
             sidebar.classList.toggle('open');
             overlay.classList.toggle('open');
         }
 
-        // ==========================================
-        // LÓGICA DO DROPDOWN DE MODELO
-        // ==========================================
+        function newChat() {
+            currentSessionId = "nova_" + Date.now();
+            chatContainer.innerHTML = "";
+            welcomeScreen.classList.remove('hide');
+            toggleSidebar();
+        }
+
+        async function loadSessions() {
+            try {
+                const res = await fetch(`${API_URL}/sessions`);
+                const data = await res.json();
+                const list = document.getElementById('chat-list');
+                list.innerHTML = "";
+                data.sessions.forEach(s => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<i class="iconoir-message-text"></i> ${s.length > 18 ? s.substring(0,18)+"..." : s}`;
+                    li.onclick = () => loadHistory(s);
+                    list.appendChild(li);
+                });
+            } catch(e) { console.log("Erro ao carregar sessões:", e); }
+        }
+
+        async function loadHistory(sessionId) {
+            currentSessionId = sessionId;
+            chatContainer.innerHTML = "";
+            welcomeScreen.classList.add('hide');
+            toggleSidebar();
+            
+            try {
+                const res = await fetch(`${API_URL}/history/${sessionId}`);
+                const data = await res.json();
+                data.messages.forEach(msg => {
+                    if (msg.role === "user" || msg.role === "assistant") {
+                        addMessage(msg.content, msg.role === "user" ? "user" : "bot");
+                    }
+                });
+            } catch(e) { console.log("Erro ao carregar histórico:", e); }
+        }
+
+        async function loadUsage() {
+            try {
+                const res = await fetch(`${API_URL}/usage`);
+                const data = await res.json();
+                const tokens = data.tokens || 0;
+                const limit = 5000000;
+                const percent = Math.min(100, Math.round((tokens / limit) * 100));
+                
+                document.getElementById('usage-percent').textContent = `${percent}%`;
+                document.getElementById('usage-bar').style.width = `${percent}%`;
+            } catch(e) {}
+        }
+
+        // DROPDOWN
         function toggleDropdown(e) {
             e.stopPropagation();
             dropdown.classList.toggle('show');
-            modelBtn.classList.toggle('open');
         }
 
         document.addEventListener('click', (e) => {
             if (!modelBtn.contains(e.target) && !dropdown.contains(e.target)) {
                 dropdown.classList.remove('show');
-                modelBtn.classList.remove('open');
             }
         });
 
@@ -376,63 +293,9 @@
             else if (titleText === 'Space') selectedModel = 'space-bunny';
             
             dropdown.classList.remove('show');
-            modelBtn.classList.remove('open');
         }
 
-        // ==========================================
-        // LÓGICA DE CARREGAR USAGE E CHAT
-        // ==========================================
-        async function loadUsage() {
-            try {
-                const res = await fetch(`${API_URL}/usage`);
-                const data = await res.json();
-                const tokens = data.tokens || 0;
-                const percent = Math.min(100, Math.round((tokens / LIMITE_TOKENS) * 100));
-                
-                document.getElementById('usage-percent').textContent = `${percent}%`;
-                document.getElementById('usage-bar').style.width = `${percent}%`;
-                
-                let tokenText = tokens.toLocaleString();
-                if (tokens >= 1000000) tokenText = (tokens/1000000).toFixed(1) + 'M';
-                else if (tokens >= 1000) tokenText = (tokens/1000).toFixed(1) + 'k';
-                
-                document.getElementById('usage-tokens').textContent = `${tokenText} / 5M`;
-            } catch(e) { 
-                console.log("Servidor offline."); 
-            }
-        }
-
-        async function loadSessions() {
-            try {
-                const resSessions = await fetch(`${API_URL}/sessions`);
-                const dataSessions = await resSessions.json();
-                const list = document.getElementById('chat-list');
-                list.innerHTML = "";
-                dataSessions.sessions.forEach(s => {
-                    const li = document.createElement('li');
-                    li.textContent = s.length > 15 ? s.substring(0,15)+"..." : s; 
-                    li.onclick = () => loadHistory(s);
-                    list.appendChild(li);
-                });
-            } catch(e) { }
-        }
-
-        async function loadHistory(sessionId) {
-            currentSessionId = sessionId;
-            chatContainer.innerHTML = "";
-            welcomeScreen.classList.add('hide');
-            if(sidebar.classList.contains('open')) toggleSidebar();
-            
-            const res = await fetch(`${API_URL}/history/${sessionId}`);
-            const data = await res.json();
-            
-            data.messages.forEach(msg => {
-                if (msg.role === "user" || msg.role === "assistant") {
-                    addMessage(msg.content, msg.role === "user" ? "user" : "bot");
-                }
-            });
-        }
-
+        // CHAT
         textarea.addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = (this.scrollHeight) + 'px';
@@ -457,16 +320,6 @@
             sendMessage();
         }
 
-        function newChat() {
-            currentSessionId = "nova_" + Date.now();
-            chatContainer.innerHTML = "";
-            welcomeScreen.classList.remove('hide');
-            textarea.value = "";
-            textarea.style.height = 'auto';
-            sendBtn.classList.remove('active');
-            toggleSidebar();
-        }
-
         async function sendMessage() {
             const text = textarea.value.trim();
             if (!text) return;
@@ -477,21 +330,30 @@
             sendBtn.classList.remove('active');
             welcomeScreen.classList.add('hide');
 
-            const loadingId = addMessage("⏳ ...", 'bot');
+            const loadingId = addMessage("...", 'bot');
 
             try {
-                const response = await fetch(`${API_URL}/chat`, {
+                const response = await fetch(`${API_URL}/api/chat`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt: text, model: selectedModel, session_id: currentSessionId })
+                    body: JSON.stringify({ 
+                        messages: [{ role: 'user', content: text }], 
+                        model: selectedModel, 
+                        session_id: currentSessionId 
+                    })
                 });
                 const data = await response.json();
-                updateMessage(loadingId, data.reply, data.exec_command);
+                
+                if (data.choices && data.choices[0]) {
+                    updateMessage(loadingId, data.choices[0].message.content, null);
+                } else {
+                    updateMessage(loadingId, "Erro: Resposta inválida do servidor.", null);
+                }
                 
                 loadUsage();
                 loadSessions();
             } catch (error) {
-                updateMessage(loadingId, "❌ ERRO: O servidor no Termux não está a correr.");
+                updateMessage(loadingId, "Erro: O servidor no Render não está a responder.", null);
             }
         }
 
@@ -515,19 +377,18 @@
             
             if (execCommand) {
                 html += `
-                <div class="exec-preview" style="background:#111; border:1px solid #333; padding:12px; border-radius:8px; margin-top:10px;">
-                    <div style="font-size:0.8rem; color:#888; margin-bottom:8px;">O Agente quer executar:</div>
-                    <div style="background:#000; padding:10px; border-radius:6px; font-family:monospace; font-size:0.85rem; overflow-x:auto; border:1px solid #333;">${execCommand.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
-                    <button style="background:#2e7d32; color:white; border:none; padding:8px 16px; border-radius:6px; font-weight:600; cursor:pointer; margin-top:10px;" onclick="executarComandoReal('${execCommand.replace(/'/g, "\\'")}')">Executar</button>
+                <div style="background:var(--bg-surface); border:1px solid var(--border-color); padding:12px; border-radius:8px; margin-top:12px;">
+                    <div style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:8px;">O Agente quer executar:</div>
+                    <div style="background:var(--bg-hover); padding:10px; border-radius:6px; font-family:monospace; font-size:0.85rem; overflow-x:auto;">${execCommand.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
+                    <button style="background:var(--accent); color:var(--bg-main); border:none; padding:8px 16px; border-radius:6px; font-weight:500; cursor:pointer; margin-top:10px; font-size:0.9rem;" onclick="executarComandoReal('${execCommand.replace(/'/g, "\\'")}')">Executar</button>
                 </div>`;
             }
             div.innerHTML = html;
-            lucide.createIcons();
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
         async function executarComandoReal(cmd) {
-            const execId = addMessage(`⚙️ A executar: \`${cmd}\`...`, 'bot');
+            const execId = addMessage("A executar...", 'bot');
             try {
                 const response = await fetch(`${API_URL}/execute`, {
                     method: 'POST',
@@ -535,16 +396,15 @@
                     body: JSON.stringify({ command: cmd })
                 });
                 const data = await response.json();
-                updateMessage(execId, `✅ **Comando executado:**\n\`\`\`bash\n${data.output}\n\`\`\``);
+                updateMessage(execId, `Comando executado:\n\`\`\`bash\n${data.output}\n\`\`\``, null);
             } catch (error) {
-                updateMessage(execId, "❌ ERRO ao executar no Termux.");
+                updateMessage(execId, "Erro ao executar.", null);
             }
         }
 
         // Init
-        loadUsage();
         loadSessions();
-        setInterval(loadUsage, 5000); 
+        loadUsage();
     </script>
 </body>
 </html>
