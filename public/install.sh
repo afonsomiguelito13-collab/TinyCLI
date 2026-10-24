@@ -1,29 +1,75 @@
 #!/bin/bash
 
+# Cores
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
-echo -e "${GREEN}🦁 Bem-vindo ao instalador do Tiny Cloud CLI!${NC}"
+# --- FUNÇÃO DA BARRA DE PROGRESSO ---
+barra_progresso() {
+    local duracao=$1
+    local descricao=$2
+    local passos=30
+    local sleep_time=$(echo "scale=3; $duracao / $passos" | bc)
 
-# 1. Instalar dependências base
-echo -e "${BLUE}📦 A instalar dependências (Rich, Questionary, Pyfiglet, Prompt_Toolkit)...${NC}"
-pkg install python -y > /dev/null 2>&1 || sudo apt install python3 -y > /dev/null 2>&1
-pip install rich questionary pyfiglet prompt_toolkit > /dev/null 2>&1
+    printf "\n${CYAN}%s${NC}\n" "$descricao"
+    
+    # Inicia a barra vazia
+    printf "${YELLOW}["
+    for ((i=0; i<$passos; i++)); do printf " "; done
+    printf "] 0%%\r"
+    printf "${YELLOW}["
 
-# 2. Configurar caminhos
+    for ((i=0; i<=$passos; i++)); do
+        # Calcula a percentagem
+        local percent=$(( i * 100 / passos ))
+        
+        # Desenha o bloco preenchido
+        printf "${GREEN}█${YELLOW}"
+        
+        # Se for o último, fecha a barra
+        if [ $i -eq $passos ]; then
+            printf "] ${GREEN}100%%${NC}\n"
+        else
+            printf "] %d%%\r${YELLOW}[" $percent
+        fi
+        sleep $sleep_time
+    done
+}
+
+echo -e "${GREEN}🦁 A instalar o Tiny Cloud CLI...${NC}"
+
+# 1. Verifica o Python
+if ! command -v python3 &> /dev/null; then
+    echo -e "${YELLOW}⚠️ Python3 não encontrado. A instalar...${NC}"
+    pkg install python -y || sudo apt install python3 -y
+fi
+
+# 2. Dependências com barra de progresso
+barra_progresso 2.0 "📦 A instalar dependências (Rich, Questionary, Pyfiglet)..."
+pip install rich questionary pyfiglet > /dev/null 2>&1
+
+# 3. Baixar ficheiros com barra de progresso
+barra_progresso 1.5 "⬇️ A baixar o Agente Cez (CLI)..."
 REPO_URL="https://raw.githubusercontent.com/afonsomiguelito13-collab/TinyCLI/main/client"
 CLIENT_DIR="$HOME/.tinycli"
+WEB_DIR="$HOME/.tinycli/web"
 mkdir -p "$CLIENT_DIR"
+mkdir -p "$WEB_DIR"
 
-# 3. Baixar o CLI
-echo -e "${BLUE}⬇️ A baixar o Agente Cez (CLI)...${NC}"
 curl -sL "$REPO_URL/tinycli.py" -o "$CLIENT_DIR/tinycli.py"
 curl -sL "$REPO_URL/SKILLS.md" -o "$CLIENT_DIR/SKILLS.md"
 
-# Criar o atalho do CLI
+barra_progresso 1.0 "⬇️ A baixar a Interface Web..."
+curl -sL "$REPO_URL/tiny_web_server.py" -o "$WEB_DIR/tiny_web_server.py"
+curl -sL "$REPO_URL/index.html" -o "$WEB_DIR/index.html"
+
+# 4. Criar atalhos
+barra_progresso 0.5 "🔗 A criar os atalhos globais..."
 if [ -d "$PREFIX/bin" ]; then BIN_DIR="$PREFIX/bin"; else BIN_DIR="/usr/local/bin"; fi
+
 cat << EOF > "$BIN_DIR/tinycli"
 #!/bin/bash
 export TINY_SERVER_URL="https://tinycli.onrender.com"
@@ -31,23 +77,7 @@ python3 "$CLIENT_DIR/tinycli.py"
 EOF
 chmod +x "$BIN_DIR/tinycli"
 
-# 4. PERGUNTAR SE QUER A WEB (O Rei a decidir!)
-echo -e "\n${YELLOW}🌐 Queres instalar a Interface Web do TinyCLI (tinycli-web)? (Y/n)${NC}"
-read -p "> " web_choice
-
-if [[ "$web_choice" == "y" || "$web_choice" == "Y" || -z "$web_choice" ]]; then
-    echo -e "${BLUE}⬇️ A instalar a Interface Web...${NC}"
-    
-    # Criar pasta web
-    WEB_DIR="$HOME/.tinycli/web"
-    mkdir -p "$WEB_DIR"
-    
-    # Baixar ficheiros da web
-    curl -sL "$REPO_URL/tiny_web_server.py" -o "$WEB_DIR/tiny_web_server.py"
-    curl -sL "$REPO_URL/index.html" -o "$WEB_DIR/index.html"
-    
-    # Criar o atalho tinycli-web
-    cat << EOF > "$BIN_DIR/tinycli-web"
+cat << EOF > "$BIN_DIR/tinycli-web"
 #!/bin/bash
 cd "$WEB_DIR"
 echo "A arrancar o servidor Web..."
@@ -56,11 +86,8 @@ sleep 2
 termux-open-url "http://localhost:8080" 2>/dev/null || echo "Abre o teu navegador em http://localhost:8080"
 wait
 EOF
-    chmod +x "$BIN_DIR/tinycli-web"
-    
-    echo -e "${GREEN}✅ Instalação Web concluída! Corre 'tinycli-web' para começar.${NC}"
-else
-    echo -e "${YELLOW}⏭️  A saltar a instalação Web. Fica só com o CLI.${NC}"
-fi
+chmod +x "$BIN_DIR/tinycli-web"
 
-echo -e "\n${GREEN}✅ Tudo pronto! Bom código, chefe! 🦁${NC}"
+echo -e "\n${GREEN}✅ Tudo pronto!${NC}"
+echo -e "🚀 Para o terminal: ${GREEN}tinycli${NC}"
+echo -e "🌐 Para a Interface Web: ${GREEN}tinycli-web${NC}"
