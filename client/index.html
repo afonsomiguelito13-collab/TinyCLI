@@ -29,7 +29,23 @@
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font-stack); -webkit-tap-highlight-color: transparent; }
         body { background-color: var(--bg-main); color: var(--text-primary); display: flex; height: 100vh; overflow: hidden; transition: background 0.3s, color 0.3s; }
         
-        /* SIDEBAR */
+        /* --- TOAST DE INICIALIZAÇÃO --- */
+        #toast-container {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; display: flex; flex-direction: column; gap: 10px;
+            pointer-events: none;
+        }
+        .toast {
+            background: var(--bg-surface); border: 1px solid var(--border-color);
+            color: var(--text-primary); padding: 10px 16px; border-radius: 20px;
+            font-size: 0.85rem; font-weight: 500; display: flex; align-items: center; gap: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15); animation: slideDown 0.3s var(--ease-out);
+        }
+        .toast i { font-size: 16px; color: var(--text-secondary); animation: spin 1s linear infinite; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* --- SIDEBAR --- */
         #sidebar-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.4); z-index: 150; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
         #sidebar-overlay.open { opacity: 1; pointer-events: auto; }
         #sidebar { position: absolute; left: calc(var(--sidebar-width) * -1); top: 0; bottom: 0; width: var(--sidebar-width); background: var(--bg-surface); border-right: 1px solid var(--border-color); z-index: 200; display: flex; flex-direction: column; transition: transform 0.3s var(--ease-out), background 0.3s; }
@@ -49,7 +65,7 @@
         .usage-bar-bg { width: 100%; height: 6px; background: var(--bg-hover); border-radius: 3px; overflow: hidden; }
         .usage-bar-fill { height: 100%; background: var(--text-primary); width: 0%; transition: width 0.3s; }
 
-        /* TOP BAR */
+        /* --- TOP BAR --- */
         #top-bar { position: absolute; top: 0; left: 0; right: 0; height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; z-index: 100; background: var(--bg-main); border-bottom: 1px solid var(--border-color); transition: background 0.3s, border 0.3s; }
         .icon-btn { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; cursor: pointer; transition: background 0.2s; color: var(--text-secondary); }
         .icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
@@ -68,7 +84,7 @@
         .item-title { font-size: 0.9rem; color: var(--text-primary); font-weight: 500; }
         .item-desc { font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px; }
 
-        /* MAIN CHAT */
+        /* --- MAIN CHAT --- */
         #main { flex: 1; display: flex; flex-direction: column; position: relative; width: 100%; height: 100%; }
         #chat-container { flex: 1; overflow-y: auto; padding: 80px 20px 120px 20px; display: flex; flex-direction: column; gap: 24px; }
         #welcome-screen { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; text-align: center; width: 100%; max-width: 600px; padding: 0 20px; transition: opacity 0.3s var(--ease-out); }
@@ -77,6 +93,7 @@
         .welcome-suggestions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;}
         .welcome-btn { background: var(--bg-surface); border: 1px solid var(--border-color); padding: 8px 16px; border-radius: 20px; font-size: 0.9rem; cursor: pointer; color: var(--text-secondary); transition: all 0.2s; }
         .welcome-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+        
         @keyframes fadeIn { 0% { opacity: 0; transform: translateY(4px); } 100% { opacity: 1; transform: translateY(0); } }
         .message { max-width: 85%; line-height: 1.6; font-size: 0.95rem; animation: fadeIn 0.2s var(--ease-out) forwards; }
         .user { align-self: flex-end; background-color: var(--bg-surface); color: var(--text-primary); padding: 12px 16px; border-radius: 16px; border-bottom-right-radius: 4px; border: 1px solid var(--border-color); }
@@ -85,6 +102,21 @@
         .bot p:last-child { margin-bottom: 0; }
         .bot pre { background: var(--bg-surface); border: 1px solid var(--border-color); padding: 16px; border-radius: 12px; overflow-x: auto; margin-top: 12px; font-size: 0.85rem; }
         .bot code { background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 0.9em; }
+
+        /* --- BOLHA DE RESPOSTA (INDICADOR DE "A PENSAR") --- */
+        .typing-indicator {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 12px 16px; background: var(--bg-surface);
+            border-radius: 16px; border-bottom-left-radius: 4px;
+            border: 1px solid var(--border-color); width: fit-content;
+        }
+        .typing-indicator span {
+            width: 6px; height: 6px; background: var(--text-secondary);
+            border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
 
         footer { position: absolute; bottom: 0; left: 0; right: 0; padding: 0 16px 24px 16px; background: linear-gradient(transparent, var(--bg-main) 30%); z-index: 50; display: flex; justify-content: center; transition: background 0.3s;}
         .input-container { width: 100%; max-width: 768px; display: flex; flex-direction: column; align-items: center; }
@@ -101,6 +133,10 @@
 </head>
 <body>
 
+    <!-- Toast de Inicialização -->
+    <div id="toast-container"></div>
+
+    <!-- Sidebar -->
     <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
     <div id="sidebar">
         <div class="sidebar-header">
@@ -122,6 +158,7 @@
         </div>
     </div>
 
+    <!-- Top Bar -->
     <div id="top-bar">
         <div class="icon-btn" onclick="toggleSidebar()">
             <i class="iconoir-menu"></i>
@@ -157,6 +194,7 @@
         </div>
     </div>
 
+    <!-- Main Chat -->
     <div id="main" style="touch-action: pan-y;">
         <div id="welcome-screen">
             <h1>Como posso ajudar hoje?</h1>
@@ -184,7 +222,7 @@
     <script>
         marked.setOptions({ gfm: true, breaks: true });
         
-        const API_URL = window.location.origin; 
+        const API_URL = "http://127.0.0.1:8080"; 
         let currentSessionId = "nova_" + Date.now();
         let selectedModel = "deepseek-v4.1";
 
@@ -196,8 +234,45 @@
         const modelBtn = document.getElementById('model-btn');
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebar-overlay');
+        const toastContainer = document.getElementById('toast-container');
 
-        // TEMA
+        // --- TOAST (BOLHA DE AVISO) ---
+        function showToast(message, isSpinner = false) {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerHTML = isSpinner ? `<i class="iconoir-refresh-double"></i> ${message}` : message;
+            toastContainer.appendChild(toast);
+            
+            if (!isSpinner) {
+                setTimeout(() => toast.remove(), 3000);
+            }
+            return toast;
+        }
+
+        // --- HEALTH CHECK (ACORDAR O RENDER) ---
+        async function checkServerHealth() {
+            const toast = showToast("O Servidor está a iniciar...", true);
+            try {
+                // Tenta ligar ao servidor com timeout de 10s
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                
+                const res = await fetch(`${API_URL}/api/version`, { signal: controller.signal });
+                clearTimeout(timeoutId);
+                
+                if (res.ok) {
+                    toast.remove();
+                } else {
+                    toast.innerHTML = "Servidor online, mas com problemas.";
+                    setTimeout(() => toast.remove(), 3000);
+                }
+            } catch (e) {
+                toast.innerHTML = "O servidor está a demorar a acordar...";
+                setTimeout(() => toast.remove(), 3000);
+            }
+        }
+
+        // --- TEMA ---
         function toggleTheme() {
             document.body.classList.toggle('light-theme');
             const isLight = document.body.classList.contains('light-theme');
@@ -210,7 +285,7 @@
             document.getElementById('theme-icon').className = 'iconoir-sun-light';
         }
 
-        // SIDEBAR
+        // --- SIDEBAR ---
         function toggleSidebar() {
             sidebar.classList.toggle('open');
             overlay.classList.toggle('open');
@@ -235,7 +310,7 @@
                     li.onclick = () => loadHistory(s);
                     list.appendChild(li);
                 });
-            } catch(e) { console.log("Erro ao carregar sessões:", e); }
+            } catch(e) {}
         }
 
         async function loadHistory(sessionId) {
@@ -252,7 +327,7 @@
                         addMessage(msg.content, msg.role === "user" ? "user" : "bot");
                     }
                 });
-            } catch(e) { console.log("Erro ao carregar histórico:", e); }
+            } catch(e) {}
         }
 
         async function loadUsage() {
@@ -268,7 +343,7 @@
             } catch(e) {}
         }
 
-        // DROPDOWN
+        // --- DROPDOWN ---
         function toggleDropdown(e) {
             e.stopPropagation();
             dropdown.classList.toggle('show');
@@ -295,7 +370,7 @@
             dropdown.classList.remove('show');
         }
 
-        // CHAT
+        // --- CHAT ---
         textarea.addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = (this.scrollHeight) + 'px';
@@ -330,10 +405,21 @@
             sendBtn.classList.remove('active');
             welcomeScreen.classList.add('hide');
 
-            const loadingId = addMessage("...", 'bot');
+            // Cria a bolha de "A pensar..."
+            const loadingId = 'loading-' + Date.now();
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = `message bot`;
+            loadingDiv.id = loadingId;
+            loadingDiv.innerHTML = `
+                <div class="typing-indicator">
+                    <span></span><span></span><span></span>
+                </div>
+            `;
+            chatContainer.appendChild(loadingDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
 
             try {
-                const response = await fetch(`${API_URL}/api/chat`, {
+                const response = await fetch(`${API_URL}/chat`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
@@ -344,16 +430,22 @@
                 });
                 const data = await response.json();
                 
+                // Remove a bolha de loading
+                const loadingEl = document.getElementById(loadingId);
+                if (loadingEl) loadingEl.remove();
+
                 if (data.choices && data.choices[0]) {
-                    updateMessage(loadingId, data.choices[0].message.content, null);
+                    addMessage(data.choices[0].message.content, 'bot');
                 } else {
-                    updateMessage(loadingId, "Erro: Resposta inválida do servidor.", null);
+                    addMessage("Erro: Resposta inválida do servidor.", 'bot');
                 }
                 
                 loadUsage();
                 loadSessions();
             } catch (error) {
-                updateMessage(loadingId, "Erro: O servidor no Render não está a responder.", null);
+                const loadingEl = document.getElementById(loadingId);
+                if (loadingEl) loadingEl.remove();
+                addMessage("Erro: O servidor no Render não está a responder. Tenta de novo.", 'bot');
             }
         }
 
@@ -371,40 +463,12 @@
             return div.id;
         }
 
-        function updateMessage(id, newText, execCommand) {
-            const div = document.getElementById(id);
-            let html = marked.parse(newText);
-            
-            if (execCommand) {
-                html += `
-                <div style="background:var(--bg-surface); border:1px solid var(--border-color); padding:12px; border-radius:8px; margin-top:12px;">
-                    <div style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:8px;">O Agente quer executar:</div>
-                    <div style="background:var(--bg-hover); padding:10px; border-radius:6px; font-family:monospace; font-size:0.85rem; overflow-x:auto;">${execCommand.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
-                    <button style="background:var(--accent); color:var(--bg-main); border:none; padding:8px 16px; border-radius:6px; font-weight:500; cursor:pointer; margin-top:10px; font-size:0.9rem;" onclick="executarComandoReal('${execCommand.replace(/'/g, "\\'")}')">Executar</button>
-                </div>`;
-            }
-            div.innerHTML = html;
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
-
-        async function executarComandoReal(cmd) {
-            const execId = addMessage("A executar...", 'bot');
-            try {
-                const response = await fetch(`${API_URL}/execute`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ command: cmd })
-                });
-                const data = await response.json();
-                updateMessage(execId, `Comando executado:\n\`\`\`bash\n${data.output}\n\`\`\``, null);
-            } catch (error) {
-                updateMessage(execId, "Erro ao executar.", null);
-            }
-        }
-
         // Init
-        loadSessions();
-        loadUsage();
+        window.onload = () => {
+            checkServerHealth();
+            loadSessions();
+            loadUsage();
+        };
     </script>
 </body>
 </html>
