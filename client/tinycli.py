@@ -20,7 +20,7 @@ custom_style = Style([
     ('highlighted', 'fg:#00ff00 bold'), ('selected', 'fg:#00ff00')
 ])
 
-VERSAO_LOCAL = "21.0.0"
+VERSAO_LOCAL = "21.5.0"
 GITHUB_CLIENT_ID = "Ov23lia18KwHbwNmBmBv"
 
 INSTALL_URL = "https://raw.githubusercontent.com/afonsomiguelito13-collab/TinyCLI/main/public/install.sh"
@@ -328,10 +328,18 @@ def chamar_ia(mensagens):
         except: pass
 
         response = http_session.post(api_url, json=data, timeout=(10, 120))
-        if response.status_code == 429: return "ERRO 429: LIMITE RÍGIDO ATINGIDO ou CASTIGO ATIVO. Faz upgrade para o Go."
+        
+        if response.status_code == 429: 
+            return "ERRO 429: LIMITE RÍGIDO ATINGIDO ou CASTIGO ATIVO. Faz upgrade para o Go."
+            
         response.raise_for_status()
         dados = response.json()
         
+        # --- O FIX DO 'CHOICES' ---
+        if "choices" not in dados or not dados["choices"]:
+            erro_servidor = dados.get("error", "Resposta inválida do servidor (sem 'choices').")
+            return f"ERRO NO SERVIDOR: {erro_servidor}"
+
         tokens_reais = dados.get("usage", {}).get("total_tokens", 0)
         multiplicador = CUSTO_MODELO.get(MODELO_ATUAL, 1)
         USAGE_DATA["tokens_usados"] += (tokens_reais * multiplicador)
