@@ -20,7 +20,7 @@ custom_style = Style([
     ('highlighted', 'fg:#00ff00 bold'), ('selected', 'fg:#00ff00')
 ])
 
-VERSAO_LOCAL = "21.5.0"
+VERSAO_LOCAL = "22.0.0"
 GITHUB_CLIENT_ID = "Ov23lia18KwHbwNmBmBv"
 
 INSTALL_URL = "https://raw.githubusercontent.com/afonsomiguelito13-collab/TinyCLI/main/public/install.sh"
@@ -33,6 +33,7 @@ CONFIG_FILE = os.path.expanduser("~/.local/share/.tinycli_config.json")
 GITHUB_TOKEN_FILE = os.path.expanduser("~/.tinycli_github_token")
 GITHUB_USER_FILE = os.path.expanduser("~/.tinycli_github_user")
 PLANO_FILE = os.path.expanduser("~/.tinycli_plano")
+USAGE_LOCK_FILE = os.path.expanduser("~/.local/share/.tinycli_usage.lock")
 
 MODELOS_DISPONIVEIS = [
     "deepseek-v4.1", 
@@ -52,7 +53,6 @@ CUSTO_MODELO = {
     "claude-opus-4.8": 20
 }
 
-# --- SISTEMA DE IDIOMAS (i18n) ---
 IDIOMAS_DISPONIVEIS = {
     "pt_PT": "🇵🇹 Português (Portugal)",
     "pt_BR": "🇧🇷 Português (Brasil)",
@@ -85,7 +85,7 @@ TRADUCOES = {
         "restantes": "Restantes",
         "texto_termos": "1. Aceitação: Ao usar o CLI, concordas com estes termos.\n2. Privacidade: O histórico é local. As chaves ficam no servidor.\n3. Uso: És responsável pelo código gerado. Comandos perigosos serão bloqueados.\n4. Fila: O servidor tem limites. Abusos resultam em banimento."
     },
-    # ... (Podes manter as outras traduções do teu ficheiro antigo) ...
+    # (As outras traduções podem ser mantidas do código anterior)
 }
 
 def obter_idioma_sistema():
@@ -117,7 +117,55 @@ http_session.mount("http://", adapter)
 def limpar_tela():
     os.system('clear' if os.name == 'posix' else 'cls')
 
-# --- LOGIN GITHUB E PLANO ---
+# --- SISTEMA DE USAGE BLINDADO ---
+def bloquear_usage():
+    """Tenta tornar o ficheiro imutável (só funciona se tiver permissões/root/chattr)"""
+    try:
+        subprocess.run(["chattr", "+i", USAGE_FILE], capture_output=True)
+    except:
+        pass
+
+def verificar_usage_integro():
+    """Se o ficheiro sumiu, aplica castigo."""
+    if not os.path.exists(USAGE_FILE):
+        console.print(Panel("[bold red]🚫 BURLA DETETADA![/bold red]\nO ficheiro de usage foi apagado. A aplicar castigo de 1.000.000 de tokens.", border_style="red", title="BURLA"))
+        # Cria um novo ficheiro com castigo
+        data = {"requests": 0, "tokens_usados": 1000000}
+        os.makedirs(os.path.dirname(USAGE_FILE), exist_ok=True)
+        with open(USAGE_FILE, "w") as f:
+            json.dump(data, f)
+        return data
+    
+    try:
+        with open(USAGE_FILE, "r") as f:
+            data = json.load(f)
+            data.setdefault("requests", 0)
+            data.setdefault("tokens_usados", 0)
+            return data
+    except:
+        return {"requests": 0, "tokens_usados": 1000000}
+
+def carregar_usage():
+    os.makedirs(os.path.dirname(USAGE_FILE), exist_ok=True)
+    data = verificar_usage_integro()
+    bloquear_usage()
+    return data
+
+def salvar_usage(data):
+    try:
+        # Desbloqueia temporariamente para escrever
+        subprocess.run(["chattr", "-i", USAGE_FILE], capture_output=True)
+    except: pass
+    
+    os.makedirs(os.path.dirname(USAGE_FILE), exist_ok=True)
+    with open(USAGE_FILE, "w") as f:
+        json.dump(data, f)
+    
+    bloquear_usage()
+
+USAGE_DATA = carregar_usage()
+
+# --- LOGIN E PLANO ---
 def verificar_login():
     return os.path.exists(GITHUB_TOKEN_FILE)
 
@@ -147,12 +195,7 @@ def fazer_login_github():
         verification_uri = dados["verification_uri"]
         interval = dados.get("interval", 5)
         
-        console.print(Panel(
-            f"[bold white]Código:[/bold white] [bold green]{user_code}[/bold green]\n\n"
-            f"[bold white]Link:[/bold white] {verification_uri}\n\n"
-            f"[dim]A abrir o navegador...[/dim]",
-            title="📱 Ação Necessária", border_style="yellow"
-        ))
+        console.print(Panel(f"[bold white]Código:[/bold white] [bold green]{user_code}[/bold green]\n\n[bold white]Link:[/bold white] {verification_uri}\n\n[dim]A abrir o navegador...[/dim]", title="📱 Ação Necessária", border_style="yellow"))
         
         subprocess.run(f"termux-open-url {verification_uri}", shell=True, capture_output=True)
         
@@ -170,7 +213,6 @@ def fazer_login_github():
                     token = token_dados["access_token"]
                     with open(GITHUB_TOKEN_FILE, "w") as f: f.write(token)
                     
-                    # Obtém o username e o plano
                     try:
                         user_res = http_session.post(f"{SERVER_URL}/api/github-user", json={"token": token}, timeout=10)
                         if user_res.status_code == 200:
@@ -203,7 +245,6 @@ def obter_plano_local():
         with open(PLANO_FILE, "r") as f: return f.read().strip()
     return "Free"
 
-# --- RESTO DO CÓDIGO (FUNCIONAL) ---
 def verificar_atualizacao():
     try:
         res = http_session.get(f"{SERVER_URL}/api/version", timeout=(3, 10))
@@ -274,22 +315,6 @@ def salvar_sessao(session_id, mensagens):
     os.makedirs(SESSIONS_DIR, exist_ok=True)
     with open(os.path.join(SESSIONS_DIR, f"{session_id}.json"), "w") as f: json.dump(mensagens, f)
 
-def carregar_usage():
-    os.makedirs(os.path.dirname(USAGE_FILE), exist_ok=True)
-    if os.path.exists(USAGE_FILE):
-        try:
-            with open(USAGE_FILE, "r") as f:
-                data = json.load(f)
-                data.setdefault("requests", 0); data.setdefault("tokens_usados", 0)
-                return data
-        except: pass
-    return {"requests": 0, "tokens_usados": 0}
-
-def salvar_usage(data):
-    os.makedirs(os.path.dirname(USAGE_FILE), exist_ok=True)
-    with open(USAGE_FILE, "w") as f: json.dump(data, f)
-
-USAGE_DATA = carregar_usage()
 DIRETORIOS_CONFIAVEIS = set(open(TRUST_FILE).read().splitlines()) if os.path.exists(TRUST_FILE) else set()
 
 def pedir_permissao(caminho):
@@ -309,7 +334,6 @@ def chamar_ia(mensagens):
     health_url = f"{SERVER_URL}/api/version"
     data = {"messages": mensagens, "model": MODELO_ATUAL}
     
-    # Acordar o Render
     for tentativa in range(5):
         try:
             res = http_session.get(health_url, timeout=(5, 10))
@@ -333,12 +357,11 @@ def chamar_ia(mensagens):
             return "ERRO 429: LIMITE RÍGIDO ATINGIDO ou CASTIGO ATIVO. Faz upgrade para o Go."
             
         response.raise_for_status()
+        texto_resposta = response.text
         dados = response.json()
         
-        # --- O FIX DO 'CHOICES' ---
-        if "choices" not in dados or not dados["choices"]:
-            erro_servidor = dados.get("error", "Resposta inválida do servidor (sem 'choices').")
-            return f"ERRO NO SERVIDOR: {erro_servidor}"
+        if "choices" not in dados:
+            return f"ERRO NO SERVIDOR (Resposta sem 'choices'):\n{texto_resposta[:500]}"
 
         tokens_reais = dados.get("usage", {}).get("total_tokens", 0)
         multiplicador = CUSTO_MODELO.get(MODELO_ATUAL, 1)
@@ -486,10 +509,7 @@ def gerar_banner(username, plano):
         banner = "TINY CLI"
     
     plano_texto = "👑 PLANO GO" if plano == "Go" else "🆓 PLANO FREE"
-    return Panel(
-        f"[bold green]{banner}[/bold green]\n[dim]v{VERSAO_LOCAL} | {username} | {plano_texto}[/dim]", 
-        border_style="green", title="🦁 Tiny Cloud CLI"
-    )
+    return Panel(f"[bold green]{banner}[/bold green]\n[dim]v{VERSAO_LOCAL} | {username} | {plano_texto}[/dim]", border_style="green", title="🦁 Tiny Cloud CLI")
 
 def barra_status(session_id, username, plano):
     status = f"[dim]User: [bold]{username}[/bold] ({plano}) | Modelo: [bold]{MODELO_ATUAL}[/bold] | Sessão: {session_id} | Tokens: {USAGE_DATA.get('tokens_usados', 0)}/{LIMITE_SEMANAL}[/dim]"
@@ -499,7 +519,6 @@ def main():
     global MODELO_ATUAL
     limpar_tela()
     
-    # --- LOGIN ---
     if not verificar_login():
         if not fazer_login_github():
             console.print("[red]A encerrar...[/red]")
